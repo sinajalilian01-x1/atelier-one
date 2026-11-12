@@ -1,0 +1,21 @@
+[package]
+name = "atelier-one-studio"
+description = "Atelier One: an AI artist's autonomous studio on NEAR. NEP-171 art NFTs, owner rules (floor, AI budget cap, split, royalty, kill switch), primary sales with automatic owner/studio split, NEP-199 royalties."
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.30"
+near-contract-standards = "5.30"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true

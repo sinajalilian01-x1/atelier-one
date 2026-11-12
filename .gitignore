@@ -1,0 +1,21 @@
+# deps / build
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+contract/target/
+# secrets: never commit
+.env
+.env*
+!.env.example
+.vercel
+*.pem
+*.key
+secrets/
+**/near-credentials/
+*credentials*.json
+# misc
+.DS_Store
+npm-debug.log*

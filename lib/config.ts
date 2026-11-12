@@ -1,0 +1,27 @@
+export const NETWORK = "testnet" as const;
+export const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "studio.atelier-one.testnet";
+export const AGENT_ID = process.env.NEXT_PUBLIC_AGENT_ID || "artist.atelier-one.testnet";
+export const DEMO_STUDIO_ID = process.env.NEXT_PUBLIC_DEMO_STUDIO_ID || "sina.atelier-one.testnet";
+export const COLLECTOR_ID = process.env.NEXT_PUBLIC_COLLECTOR_ID || "collector.atelier-one.testnet";
+export const RPC_URLS = ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];
+/** NEAR Rocks (FastNear) is the explorer the official explorer.testnet.near.org selector recommends. */
+export const EXPLORER = "https://testnet.near.rocks";
+export const txUrl = (h: string) => `${EXPLORER}/tx/${h}`;
+export const accountUrl = (a: string) => `${EXPLORER}/account/${a}`;
+export const nearblocksTxUrl = (h: string) => `https://testnet.nearblocks.io/txns/${h}`;
+export const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
+/** Hard cap on what the demo collector will pay for one work (yoctoNEAR). */
+export const DEMO_COLLECTOR_MAX = 250_000_000_000_000_000_000_000n; // 0.25 NEAR
+export const YOCTO = 10n ** 24n;
+export function toNear(y: string | bigint, digits = 4): string {
+  const v = typeof y === "bigint" ? y : BigInt(y || "0");
+  const neg = v < 0n;
+  const a = neg ? -v : v;
+  const whole = a / YOCTO;
+  const frac = (a % YOCTO).toString().padStart(24, "0").slice(0, digits);
+  return `${neg ? "-" : ""}${whole}.${frac}`;
+}
+export function nearToYocto(n: number | string): string {
+  const [w, f = ""] = String(n).split(".");
+  return (BigInt(w || "0") * YOCTO + BigInt((f + "0".repeat(24)).slice(0, 24))).toString();
+}

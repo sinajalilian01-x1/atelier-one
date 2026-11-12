@@ -4,7 +4,7 @@ import { localConcept, MOTIFS, PALETTES, renderSvg, hashSeed, type Motif } from 
 const BASE = process.env.NEAR_AI_BASE_URL || "https://cloud-api.near.ai/v1";
 const TEXT_MODEL = process.env.NEAR_AI_TEXT_MODEL || "Qwen/Qwen3.6-35B-A3B-FP8";
 const IMAGE_MODEL = process.env.NEAR_AI_IMAGE_MODEL || "black-forest-labs/FLUX.2-klein-4B";
-/** Nominal compute fee the studio pays itself when the local fallback painter is used. */
+/** Flat compute fee charged to the studio budget (paid to the treasury) when the local fallback painter is used. */
 export const FALLBACK_FEE_YOCTO = "2000000000000000000000"; // 0.002 NEAR
 
 export function aiMode() {

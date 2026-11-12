@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import type { StudioApi } from "./useStudio";
 import { toNear } from "./config";
-import { linesFor, net, type Line } from "./lines";
+import { linesFor, net, pnl, type Line } from "./lines";
 
 export function useNow(active: boolean) {
   const [now, setNow] = useState(0);
@@ -56,8 +56,9 @@ export function deriveView(s: StudioApi, now: number) {
     lines = slice.reverse().flatMap((e) => linesFor(e));
   }
   const netY = net(lines);
+  const pl = pnl(lines);
   return {
-    st, floor, split, thinking, elapsed, running, lines, receiptMode, netY,
+    st, floor, split, thinking, elapsed, running, lines, receiptMode, netY, pl,
     spent: st ? toNear(st.spent_today, 3) : "0", cap: st ? toNear(st.daily_ai_cap, 3) : "0",
     budget: st ? toNear(st.budget, 3) : "0",
   };

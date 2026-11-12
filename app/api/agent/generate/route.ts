@@ -6,15 +6,23 @@ import { pin } from "@/lib/ipfs";
 import { signJob } from "@/lib/job";
 import { record } from "@/lib/ledger";
 import { DEMO_STUDIO_ID, nearToYocto, toNear } from "@/lib/config";
+import { rateLimit, verifyOwnerAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /** Step 1: the artist thinks, paints, pins to IPFS and pays for the inference out of the studio budget (on-chain). */
 export async function POST(req: Request) {
+  const rl = rateLimit(req, "generate", 6, 10 * 60_000);
+  if (!rl.ok) return json({ error: `Easy, the artist needs a breather: try again in ${rl.retryAfter}s (6 runs per 10 min per visitor).` }, 429);
   const body = await req.json().catch(() => ({}));
   const studioId = body.studio || DEMO_STUDIO_ID;
   if (!validAccount(studioId)) return json({ error: "bad studio id" }, 400);
+  // The demo studio is open to everyone. Any other studio only runs with its owner's NEP-413 signature.
+  if (studioId !== DEMO_STUDIO_ID) {
+    const err = await verifyOwnerAuth(studioId, body.auth);
+    if (err) return json({ error: err, needAuth: true }, 401);
+  }
   const studio = await getStudio(studioId);
   if (!studio) return json({ error: `No studio for ${studioId}. Open one first.` }, 404);
   const jobId = randomUUID();
@@ -42,9 +50,10 @@ export async function POST(req: Request) {
   const priceYocto = nearToYocto(art.price);
   const job = {
     jobId, studioId, title: art.title,
-    description: `${art.thinking} — painted by the Atelier One agent (${AGENT_DESC(art.provider)}) for studio ${studioId}.`,
-    media: pinned.url, mediaHash: pinned.media_hash,
-    extra: JSON.stringify({ motif: art.motif, palette: art.paletteName, provider: art.provider, model: art.model, job_id: jobId, cid: pinned.cid, cost_usd: art.costUsd }),
+    // Kept short on purpose: every byte of metadata is paid from the studio budget as storage.
+    description: art.thinking.slice(0, 140),
+    media: pinned.cid, mediaHash: pinned.media_hash,
+    extra: JSON.stringify({ by: AGENT_DESC(art.provider), job: jobId.slice(0, 8) }),
     priceYocto, createdAt: Date.now(),
   };
   return json({
@@ -53,4 +62,4 @@ export async function POST(req: Request) {
     tx: { hash: charge.hash, ok: true, at, events: charge.events },
   });
 }
-const AGENT_DESC = (p: string) => (p.startsWith("NEAR AI") ? "NEAR AI Cloud" : "local generative painter");
+const AGENT_DESC = (p: string) => (p.startsWith("NEAR AI") ? "near-ai" : "local");

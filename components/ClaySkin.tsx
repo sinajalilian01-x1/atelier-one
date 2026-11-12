@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useStudio } from "@/lib/useStudio";
 import { deriveView, fmtAmt, useNow, useTyped } from "@/lib/view";
-import { txUrl, toNear } from "@/lib/config";
+import { txUrl, toNear, mediaUrl } from "@/lib/config";
 import { ArtCanvas } from "./ArtCanvas";
 import { OwnerPanel } from "./OwnerPanel";
 import { ThemeToggle } from "./ThemeToggle";
@@ -92,7 +92,7 @@ export default function ClaySkin() {
             <div className="rr"><span>Price floor</span><b>{v.floor} NEAR</b></div>
             <div className="rr"><span>AI budget / day</span><b>{v.cap.replace(/0+$/, "").replace(/\.$/, "")} NEAR</b></div>
             <div className="rr"><span>You / Studio</span><b>{v.split}% · {100 - v.split}%</b></div>
-            <div className="rr"><span>Kill switch</span>
+            <div className="rr"><span>Kill switch{st?.kill_switch && s.killReleaseAt && now ? <small className="auto"> · auto-release {Math.max(0, Math.ceil((s.killReleaseAt - now) / 1000))}s</small> : null}</span>
               <button className={`sw ${st?.kill_switch ? "off" : ""}`} onClick={s.toggleKill} disabled={s.killBusy || v.running || (!s.isDemo && s.account !== s.studioId)} aria-label={st?.kill_switch ? "Release kill switch" : "Engage kill switch"} title={st?.kill_switch ? "ENGAGED: agent paused on-chain. Click to release." : "Armed: click to pause the agent on-chain"} />
             </div>
           </div>
@@ -112,9 +112,9 @@ export default function ClaySkin() {
         <h2>Fresh off the easel</h2>
         <div className="row">
           {(s.state?.recent || []).slice(0, 6).map((t: any) => (
-            <a key={t.token_id} className="clay" href={t.metadata?.media} target="_blank" rel="noreferrer">
+            <a key={t.token_id} className="clay" href={mediaUrl(t.metadata?.media)} target="_blank" rel="noreferrer">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={t.metadata?.media} alt={t.metadata?.title} loading="lazy" />
+              <img src={mediaUrl(t.metadata?.media)} alt={t.metadata?.title} loading="lazy" />
               <b>{t.metadata?.title}</b><small>#{t.token_id} · {t.owner_id.replace(".testnet", "")}</small>
             </a>
           ))}

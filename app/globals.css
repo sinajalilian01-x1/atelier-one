@@ -103,7 +103,8 @@ button:disabled{cursor:not-allowed}
 .rc-receipt .l.payout div{padding-left:0}
 .rc-receipt .l.fail{color:#E0362B}
 @keyframes rcPrint{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
-.rc-receipt .tot{font-size:19px;font-weight:700}
+.rc-receipt .tot{font-size:19px;font-weight:700;align-items:flex-start}.rc-receipt .tot i{font-size:11px;font-weight:400}.rc-receipt .tot.own{font-size:16px;padding-top:0}
+.cl .rr small.auto{color:#E0362B;font-weight:700}
 .rc-receipt .bc{display:block;height:46px;background:repeating-linear-gradient(90deg,#0E0E0E 0 2px,transparent 2px 4px,#0E0E0E 4px 7px,transparent 7px 9px,#0E0E0E 9px 10px,transparent 10px 13px);margin-top:12px}
 .rc-receipt.printing{animation:rcShake .25s linear infinite}
 @keyframes rcShake{50%{transform:translateY(1px)}}
@@ -231,14 +232,18 @@ a.lv-row:hover{background:#F3F8E6}
   .rc-left{padding:18px 16px 24px}
   .rc-menu{display:none}
   .rc-logo{font-size:21px}.rc-wb{padding:8px 12px;font-size:12px}
-  .ao-theme{left:auto;right:8px;bottom:8px;font-size:11px;box-shadow:0 3px 0 #0E0E0E}.ao-theme span{display:none}
+  /* skin toggle: in the page flow at the very bottom instead of floating over content */
+  .ao-theme{position:static;margin:8px auto 28px;width:max-content;font-size:12px;box-shadow:0 3px 0 #0E0E0E;justify-self:center}
+  .rc,.cl{overflow-x:hidden}
   .rc-head{align-items:center}
   .rc h1{font-size:38px;letter-spacing:-1.5px}
-  .rc-start{width:112px;height:112px;font-size:20px;margin-right:0}.rc-start small{font-size:9px;text-align:center;padding:0 8px}
+  .rc-head{gap:10px}
+  .rc-start{width:116px;height:116px;font-size:18px;letter-spacing:0;margin-right:0;padding:0 12px;overflow:hidden}
+  .rc-start small{font-size:9px;line-height:1.25;text-align:center;max-width:84px}
   .rc-studio{grid-template-columns:1fr}
   .rc-receipt,.rc-fresh{width:calc(100vw - 32px)}
   .rc-printer{width:calc(100vw - 8px)}
-  .hiw{padding:24px 16px 90px}.hiw-grid{grid-template-columns:1fr}
+  .hiw{padding:24px 16px 16px}.hiw-grid{grid-template-columns:1fr}
   .cl-nav{margin:12px 12px 0;padding:0 14px;height:60px}.cl-nav .m{display:none}.cl-logo{font-size:22px}
   .cl-wrap{grid-template-columns:1fr;padding:16px}
   .cl-side{display:block}
@@ -249,4 +254,10 @@ a.lv-row:hover{background:#F3F8E6}
   .cl-bubble{order:2}.cl-desk .status{order:3}
   .cl-collection{padding:0 16px}.cl-collection .row{grid-template-columns:repeat(2,1fr)}
   .lv{padding:16px}.lv-row{grid-template-columns:1fr 90px}.lv-row span:nth-child(1),.lv-row span:nth-child(3),.lv-row span:nth-child(4){display:none}
+}
+
+@media (max-width:400px){
+  .rc h1{font-size:33px}
+  .rc-start{width:106px;height:106px;font-size:15px;padding:0 10px;box-shadow:0 6px 0 #0E0E0E}
+  .rc-start small{font-size:8.5px;max-width:76px}
 }

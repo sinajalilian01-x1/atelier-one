@@ -54,6 +54,14 @@ export function useStudio() {
     } catch {}
   }, [studioId]);
 
+  // The shared demo kill switch auto-releases after 60 s: poll the server right when it is due.
+  const killReleaseAt: number | null = state?.killReleaseAt ?? null;
+  useEffect(() => {
+    if (!killReleaseAt) return;
+    const t = setTimeout(() => refresh(), Math.max(1000, killReleaseAt - Date.now() + 1500));
+    return () => clearTimeout(t);
+  }, [killReleaseAt, refresh]);
+
   useEffect(() => { refresh(); const t = setInterval(() => { if (!running.current) refresh(); }, 20000); return () => clearInterval(t); }, [refresh]);
 
   // ---- wallet selector (lazy, client only) ----
@@ -103,6 +111,27 @@ export function useStudio() {
     return null; // redirect wallets come back via ?transactionHashes
   }, [initWallet]);
 
+  /** NEP-413: the owner signs once (valid 12 h) so the server will run a non-demo studio. */
+  const ownerAuth = useCallback(async (sid: string) => {
+    const k = `ao-auth:${sid}`;
+    try {
+      const c = JSON.parse(localStorage.getItem(k) || "null");
+      const until = c && Date.parse(String(c.message).split(" until ")[1]);
+      if (c && until > Date.now() + 5 * 60_000) return c;
+    } catch {}
+    const sel = await initWallet();
+    const w = await sel.wallet();
+    const until = new Date(Date.now() + 12 * 3600_000).toISOString();
+    const message = `Atelier One: run studio ${sid} until ${until}`;
+    const nonce = crypto.getRandomValues(new Uint8Array(32));
+    const callbackUrl = window.location.href;
+    const r: any = await w.signMessage({ message, recipient: CONTRACT_ID, nonce, callbackUrl } as any);
+    if (!r?.signature) throw new Error("The wallet did not return a signature");
+    const auth = { accountId: r.accountId, publicKey: r.publicKey, signature: r.signature, message, nonce: btoa(String.fromCharCode(...nonce)), callbackUrl };
+    localStorage.setItem(k, JSON.stringify(auth));
+    return auth;
+  }, [initWallet]);
+
   const addLines = (entry: EntryLike) => setRunLines((ls) => [...ls, ...linesFor(entry)]);
   const setStep = (key: string, patch: Partial<StepInfo>) => setSteps((ss) => ss.map((s) => (s.key === key ? { ...s, ...patch } : s)));
 
@@ -115,7 +144,12 @@ export function useStudio() {
     setSteps(STEP_DEFS.map((s) => ({ ...s, state: "idle" })));
     setArt(null); setPhase("painting"); setProgress(4); setStep("generate", { state: "active" });
     const tick = setInterval(() => setProgress((p) => (p < 55 ? p + 1.5 : p)), 250);
-    const g = await post("/api/agent/generate", { studio: studioId });
+    let auth: any = undefined;
+    if (studioId !== DEMO_STUDIO_ID) {
+      try { auth = await ownerAuth(studioId); } catch (e) { clearInterval(tick); return fail("generate", `Owner signature needed: ${(e as Error).message}`); }
+    }
+    const g = await post("/api/agent/generate", { studio: studioId, auth });
+    if (g.status === 401 && g.data.needAuth) localStorage.removeItem(`ao-auth:${studioId}`);
     clearInterval(tick);
     if (g.status === 409 && g.data.killed) {
       addLines({ hash: g.data.tx.hash, at: g.data.tx.at, ok: false, error: g.data.tx.error, action: "agent_charge_inference", studioId, events: [] });
@@ -179,7 +213,7 @@ export function useStudio() {
     setStep("split", { state: "done", hash: buyTx.hash, note: "paid in the same transaction" }); setProgress(100);
     setPhase("done"); setFinishedAt(Date.now()); running.current = false;
     refresh();
-  }, [studioId, refresh, walletTx]);
+  }, [studioId, refresh, walletTx, ownerAuth]);
 
   const chooseBuyer = useCallback((v: "wallet" | "demo") => { buyChoice.current?.(v); }, []);
 
@@ -213,7 +247,7 @@ export function useStudio() {
   return {
     state, studioId, phase, steps, art, runLines, globalLines, ledger, error, tokenId, price, progress, startedAt, finishedAt,
     account, connect, disconnect, start, chooseBuyer, countdown, toggleKill, killBusy, openStudio, useStudioOf, toast, setToast, refresh,
-    isDemo: studioId === DEMO_STUDIO_ID,
+    isDemo: studioId === DEMO_STUDIO_ID, killReleaseAt,
   };
 }
 export type StudioApi = ReturnType<typeof useStudio>;

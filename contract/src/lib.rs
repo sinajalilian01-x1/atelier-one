@@ -4,13 +4,17 @@
 //! * An owner opens a studio with a NEAR budget and rules: style, price floor, daily AI spend cap,
 //!   revenue split (owner bps), resale royalty (bps) and a kill switch.
 //! * The agent account (`agent_id`, used only through a function-call key) can:
-//!   - `agent_charge_inference`: pay for AI inference out of the studio budget (capped per day),
+//!   - `agent_charge_inference`: pay for AI inference out of the studio budget (capped per day).
+//!     The fee goes to the platform `treasury_id` (which settles with the inference provider),
+//!     never to the agent's own account,
 //!   - `agent_mint`: mint a NEP-171 artwork (storage paid from the studio budget),
 //!   - `agent_list`: list it for sale at or above the owner's floor.
 //!   Every agent method fails while the kill switch is engaged.
 //! * Anyone can `buy` a listed work. Primary sales are split automatically: `split_owner_bps`
 //!   goes to the owner's wallet, the rest refills the studio's AI budget. Resales pay the studio
-//!   a royalty (NEP-199 `nft_payout` for external marketplaces, enforced in-contract here).
+//!   a royalty. External marketplaces get the same split through NEP-199 `nft_payout` /
+//!   `nft_transfer_payout`: the studio's share is paid to this contract and credited to the
+//!   studio budget, so no sale path routes money around the budget.
 //! * Every money movement emits an `atelier_one` NEP-297 event, so the public ledger is rebuilt
 //!   from on-chain logs.
 
@@ -97,6 +101,7 @@ pub struct Payout {
 pub struct Config {
     pub admin_id: AccountId,
     pub agent_id: AccountId,
+    pub treasury_id: AccountId,
     pub studios: u32,
     pub total_supply: U128,
     pub listings: u32,
@@ -108,6 +113,7 @@ pub struct Config {
 pub struct Contract {
     admin_id: AccountId,
     agent_id: AccountId,
+    treasury_id: AccountId,
     tokens: NonFungibleToken,
     metadata: LazyOption<NFTContractMetadata>,
     studios: IterableMap<AccountId, Studio>,
@@ -127,6 +133,33 @@ fn bps(amount: u128, bps: u16) -> u128 {
     amount * bps as u128 / 10_000
 }
 
+/// How a sale of `price` is divided: (seller, owner, studio budget, royalty).
+/// Primary sale: owner gets `split_owner_bps` of the price, the studio budget keeps the rest.
+/// Resale: the seller gets price minus royalty; the royalty is split owner/studio the same way.
+pub fn sale_split(price: u128, primary: bool, royalty_bps: u16, split_owner_bps: u16) -> (u128, u128, u128, u128) {
+    let (royalty, seller) = if primary { (0, 0) } else {
+        let r = bps(price, royalty_bps);
+        (r, price - r)
+    };
+    let shareable = if primary { price } else { royalty };
+    let owner = bps(shareable, split_owner_bps);
+    (seller, owner, shareable - owner, royalty)
+}
+
+const PINATA_BASE_URI: &str = "https://gateway.pinata.cloud/ipfs";
+
+#[near(serializers = [borsh])]
+struct ContractV1 {
+    admin_id: AccountId,
+    agent_id: AccountId,
+    tokens: NonFungibleToken,
+    metadata: LazyOption<NFTContractMetadata>,
+    studios: IterableMap<AccountId, Studio>,
+    listings: IterableMap<TokenId, Listing>,
+    token_studio: LookupMap<TokenId, AccountId>,
+    next_token: u64,
+}
+
 fn pay(to: &AccountId, amount: u128) {
     if amount > 0 {
         let _ = Promise::new(to.clone()).transfer(NearToken::from_yoctonear(amount));
@@ -136,19 +169,20 @@ fn pay(to: &AccountId, amount: u128) {
 #[near]
 impl Contract {
     #[init]
-    pub fn new(admin_id: AccountId, agent_id: AccountId) -> Self {
+    pub fn new(admin_id: AccountId, agent_id: AccountId, treasury_id: AccountId) -> Self {
         let metadata = NFTContractMetadata {
             spec: NFT_METADATA_SPEC.to_string(),
             name: "Atelier One".to_string(),
             symbol: "ATELIER".to_string(),
             icon: Some("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23C8F169'/%3E%3Ccircle cx='40' cy='26' r='12' fill='%23FF5A36'/%3E%3Cpath d='M8 48 Q32 30 56 48' stroke='%230E0E0E' stroke-width='5' fill='none'/%3E%3C/svg%3E".to_string()),
-            base_uri: None,
+            base_uri: Some(PINATA_BASE_URI.to_string()),
             reference: None,
             reference_hash: None,
         };
         Self {
             admin_id: admin_id.clone(),
             agent_id,
+            treasury_id,
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
                 admin_id,
@@ -161,6 +195,29 @@ impl Contract {
             listings: IterableMap::new(StorageKey::Listings),
             token_studio: LookupMap::new(StorageKey::TokenStudio),
             next_token: 1,
+        }
+    }
+
+    /// One-time upgrade from v1 state: adds the treasury and an IPFS `base_uri` so new tokens can
+    /// store a bare CID as `media` (cheaper mint storage).
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate(treasury_id: AccountId) -> Self {
+        let old: ContractV1 = env::state_read().unwrap_or_else(|| env::panic_str("No v1 state"));
+        let mut metadata = old.metadata;
+        let mut md = metadata.get().unwrap();
+        md.base_uri = Some(PINATA_BASE_URI.to_string());
+        metadata.set(&md);
+        Self {
+            admin_id: old.admin_id,
+            agent_id: old.agent_id,
+            treasury_id,
+            tokens: old.tokens,
+            metadata,
+            studios: old.studios,
+            listings: old.listings,
+            token_studio: old.token_studio,
+            next_token: old.next_token,
         }
     }
 
@@ -292,8 +349,8 @@ impl Contract {
 
     // ---------------- agent (function-call key only) ----------------
 
-    /// Agent pays for AI inference from the studio budget. The NEAR is moved to the agent's
-    /// own account, which settles with the inference provider. Capped per UTC day.
+    /// Agent pays for AI inference from the studio budget. The NEAR goes to the platform
+    /// treasury (which pays the inference provider), not to the agent. Capped per UTC day.
     pub fn agent_charge_inference(
         &mut self,
         studio_id: AccountId,
@@ -314,8 +371,8 @@ impl Contract {
         s.spent_today = U128(s.spent_today.0 + amount.0);
         s.ai_spent_total = U128(s.ai_spent_total.0 + amount.0);
         self.studios.insert(studio_id.clone(), s.clone());
-        pay(&self.agent_id.clone(), amount.0);
-        emit("inference_paid", json!({"studio_id": studio_id, "amount": amount, "model": model,
+        pay(&self.treasury_id.clone(), amount.0);
+        emit("inference_paid", json!({"studio_id": studio_id, "amount": amount, "to": self.treasury_id, "model": model,
             "provider": provider, "job_id": job_id, "budget": s.budget, "spent_today": s.spent_today}));
         s
     }
@@ -334,7 +391,7 @@ impl Contract {
         let token = self.tokens.internal_mint_with_refund(token_id.clone(), studio_id.clone(), Some(md), None);
         self.token_studio.insert(token_id.clone(), studio_id.clone());
         self.token_studio.flush();
-        let used = env::storage_usage().saturating_sub(before) + 120; // + studio/map overhead
+        let used = env::storage_usage().saturating_sub(before); // exact bytes this token added
         let cost = env::storage_byte_cost().as_yoctonear() * used as u128;
         require!(cost <= s.budget.0, "Studio budget too low to pay mint storage");
         s.budget = U128(s.budget.0 - cost);
@@ -409,13 +466,8 @@ impl Contract {
 
         let price = l.price.0;
         let mut s = self.studio_or_panic(&l.studio_id);
-        let (royalty, seller_amount) = if l.primary { (0u128, 0u128) } else {
-            let r = bps(price, s.royalty_bps);
-            (r, price - r)
-        };
-        let shareable = if l.primary { price } else { royalty };
-        let owner_amount = bps(shareable, s.split_owner_bps);
-        let studio_amount = shareable - owner_amount;
+        let (seller_amount, owner_amount, studio_amount, royalty) =
+            sale_split(price, l.primary, s.royalty_bps, s.split_owner_bps);
 
         s.budget = U128(s.budget.0 + studio_amount);
         s.owner_earned_total = U128(s.owner_earned_total.0 + owner_amount);
@@ -445,19 +497,12 @@ impl Contract {
 
     // ---------------- NEP-199 royalties ----------------
 
+    /// NEP-199. Uses the same split as `buy`: the owner's share goes to the owner's wallet and the
+    /// studio's share goes to this contract, which credits it to the studio budget in
+    /// `nft_transfer_payout`. A primary sale on an external marketplace is split 70/30 too.
     pub fn nft_payout(&self, token_id: TokenId, balance: U128, max_len_payout: Option<u32>) -> Payout {
-        let owner = self.tokens.owner_by_id.get(&token_id).unwrap_or_else(|| env::panic_str("Token not found"));
-        let studio_id = self.token_studio.get(&token_id).cloned().unwrap_or_else(|| env::panic_str("Unknown token"));
-        let s = self.studio_or_panic(&studio_id);
-        let mut payout = HashMap::new();
-        if owner == studio_id {
-            payout.insert(owner, balance);
-        } else {
-            require!(max_len_payout.unwrap_or(2) >= 2, "max_len_payout too small");
-            let royalty = bps(balance.0, s.royalty_bps);
-            payout.insert(studio_id, U128(royalty));
-            *payout.entry(owner).or_insert(U128(0)) = U128(balance.0 - royalty);
-        }
+        let (payout, _, _, _, _) = self.compute_payout(&token_id, balance.0);
+        require!(payout.len() as u32 <= max_len_payout.unwrap_or(3), "max_len_payout too small");
         Payout { payout }
     }
 
@@ -472,10 +517,26 @@ impl Contract {
         max_len_payout: Option<u32>,
     ) -> Payout {
         assert_one_yocto();
-        let payout = self.nft_payout(token_id.clone(), balance, max_len_payout);
+        let (payout, studio_id, primary, owner_amount, studio_amount) = self.compute_payout(&token_id, balance.0);
+        require!(payout.len() as u32 <= max_len_payout.unwrap_or(3), "max_len_payout too small");
         self.listings.remove(&token_id);
         self.tokens.internal_transfer(&env::predecessor_account_id(), &receiver_id, &token_id, approval_id, memo);
-        payout
+        // The marketplace pays `payout` right after this call; the studio share lands on this
+        // contract, so it is credited to the studio budget here.
+        let mut s = self.studio_or_panic(&studio_id);
+        s.budget = U128(s.budget.0 + studio_amount);
+        s.owner_earned_total = U128(s.owner_earned_total.0 + owner_amount);
+        s.studio_earned_total = U128(s.studio_earned_total.0 + studio_amount);
+        if primary {
+            s.works_sold += 1;
+            s.revenue_total = U128(s.revenue_total.0 + balance.0);
+        } else {
+            s.royalties_total = U128(s.royalties_total.0 + owner_amount + studio_amount);
+        }
+        self.studios.insert(studio_id.clone(), s.clone());
+        emit("payout_split", json!({"studio_id": studio_id, "token_id": token_id, "balance": balance,
+            "owner_amount": U128(owner_amount), "studio_amount": U128(studio_amount), "budget": s.budget}));
+        Payout { payout }
     }
 
     // ---------------- views ----------------
@@ -484,6 +545,7 @@ impl Contract {
         Config {
             admin_id: self.admin_id.clone(),
             agent_id: self.agent_id.clone(),
+            treasury_id: self.treasury_id.clone(),
             studios: self.studios.len(),
             total_supply: self.tokens.nft_total_supply(),
             listings: self.listings.len(),
@@ -522,6 +584,12 @@ impl Contract {
         self.agent_id = agent_id;
     }
 
+    /// Admin can change where inference fees go.
+    pub fn set_treasury(&mut self, treasury_id: AccountId) {
+        require!(env::predecessor_account_id() == self.admin_id, "Admin only");
+        self.treasury_id = treasury_id;
+    }
+
     // ---------------- internals ----------------
 
     fn validate_rules(name: &str, style: &str, floor: u128, split: u16, royalty: u16) {
@@ -533,6 +601,23 @@ impl Contract {
 
     fn assert_agent(&self) {
         require!(env::predecessor_account_id() == self.agent_id, "Agent only");
+    }
+
+    /// (payout map, studio_id, primary, owner_amount, studio_amount)
+    fn compute_payout(&self, token_id: &TokenId, balance: u128) -> (HashMap<AccountId, U128>, AccountId, bool, u128, u128) {
+        let holder = self.tokens.owner_by_id.get(token_id).unwrap_or_else(|| env::panic_str("Token not found"));
+        let studio_id = self.token_studio.get(token_id).cloned().unwrap_or_else(|| env::panic_str("Unknown token"));
+        let s = self.studio_or_panic(&studio_id);
+        let primary = holder == studio_id;
+        let (seller, owner, studio, _) = sale_split(balance, primary, s.royalty_bps, s.split_owner_bps);
+        let mut payout: HashMap<AccountId, U128> = HashMap::new();
+        let mut add = |a: AccountId, v: u128| {
+            if v > 0 { let e = payout.entry(a).or_insert(U128(0)); e.0 += v; }
+        };
+        add(holder, seller);
+        add(s.owner_id.clone(), owner);
+        add(env::current_account_id(), studio);
+        (payout, studio_id, primary, owner, studio)
     }
 
     fn studio_or_panic(&self, id: &AccountId) -> Studio {
@@ -615,3 +700,202 @@ impl NonFungibleTokenMetadataProvider for Contract {
 
 #[allow(dead_code)]
 fn _unused(_: Base64VecU8) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use near_sdk::test_utils::{accounts, VMContextBuilder};
+    use near_sdk::testing_env;
+
+    const NEAR: u128 = 1_000_000_000_000_000_000_000_000;
+    const MILLI: u128 = NEAR / 1_000;
+
+    fn admin() -> AccountId { "admin.testnet".parse().unwrap() }
+    fn agent() -> AccountId { "artist.testnet".parse().unwrap() }
+    fn treasury() -> AccountId { "treasury.testnet".parse().unwrap() }
+    fn owner() -> AccountId { "owner.testnet".parse().unwrap() }
+    fn buyer() -> AccountId { "buyer.testnet".parse().unwrap() }
+
+    fn ctx(predecessor: AccountId, deposit: u128) {
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("studio.testnet".parse().unwrap())
+            .predecessor_account_id(predecessor.clone())
+            .signer_account_id(predecessor)
+            .account_balance(NearToken::from_near(100))
+            .attached_deposit(NearToken::from_yoctonear(deposit))
+            .block_timestamp(1_700_000_000_000_000_000);
+        testing_env!(b.build());
+    }
+
+    /// Contract with one studio: floor 0.05, cap 0.01/day, 70/30 split, 10% royalty, 1 NEAR budget.
+    fn setup() -> Contract {
+        ctx(admin(), 0);
+        let mut c = Contract::new(admin(), agent(), treasury());
+        ctx(owner(), NEAR);
+        c.open_studio("Studio".into(), "warm".into(), U128(50 * MILLI), 7_000, 1_000, U128(10 * MILLI));
+        c
+    }
+
+    fn md() -> TokenMetadata {
+        TokenMetadata {
+            title: Some("Moss Morning".into()), description: None, media: Some("bafy".into()), media_hash: None,
+            copies: None, issued_at: None, expires_at: None, starts_at: None, updated_at: None,
+            extra: None, reference: None, reference_hash: None,
+        }
+    }
+
+    fn mint(c: &mut Contract) -> TokenId {
+        ctx(agent(), 0);
+        c.agent_mint(owner(), md()).token_id
+    }
+
+    #[test]
+    fn split_math_primary_and_resale() {
+        // primary 1 NEAR, 70/30: owner 0.7, studio 0.3, no seller payout, no royalty
+        assert_eq!(sale_split(NEAR, true, 1_000, 7_000), (0, 700 * MILLI, 300 * MILLI, 0));
+        // resale 1 NEAR, 10% royalty split 70/30: seller 0.9, owner 0.07, studio 0.03
+        assert_eq!(sale_split(NEAR, false, 1_000, 7_000), (900 * MILLI, 70 * MILLI, 30 * MILLI, 100 * MILLI));
+        // shares always add up to the price, even with odd amounts
+        for p in [1u128, 7, 999, 123_456_789_012_345] {
+            let (s, o, st, r) = sale_split(p, false, 2_500, 3_333);
+            assert_eq!(s + o + st, p);
+            assert_eq!(o + st, r);
+            let (_, o, st, _) = sale_split(p, true, 2_500, 3_333);
+            assert_eq!(o + st, p);
+        }
+    }
+
+    #[test]
+    fn buy_splits_and_refills_budget() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        let budget_after_mint = c.get_studio(owner()).unwrap().budget.0;
+        c.agent_list(t.clone(), U128(100 * MILLI));
+        ctx(buyer(), 100 * MILLI);
+        let r = c.buy(t.clone());
+        assert_eq!(r["owner_amount"], json!(U128(70 * MILLI)));
+        assert_eq!(r["studio_amount"], json!(U128(30 * MILLI)));
+        let s = c.get_studio(owner()).unwrap();
+        assert_eq!(s.budget.0, budget_after_mint + 30 * MILLI);
+        assert_eq!(s.works_sold, 1);
+        assert_eq!(c.nft_token(t).unwrap().owner_id, buyer());
+    }
+
+    #[test]
+    #[should_panic(expected = "Price is below the owner's floor")]
+    fn floor_is_enforced() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        c.agent_list(t, U128(49 * MILLI));
+    }
+
+    #[test]
+    fn listing_at_floor_is_ok() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        assert_eq!(c.agent_list(t, U128(50 * MILLI)).price.0, 50 * MILLI);
+    }
+
+    #[test]
+    fn daily_cap_is_enforced_and_resets_next_day() {
+        let mut c = setup();
+        ctx(agent(), 0);
+        c.agent_charge_inference(owner(), U128(6 * MILLI), "m".into(), "p".into(), "j1".into());
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.agent_charge_inference(owner(), U128(5 * MILLI), "m".into(), "p".into(), "j2".into());
+        }));
+        assert!(r.is_err(), "second charge must exceed the 0.01/day cap");
+        // next UTC day: spent_today resets
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("studio.testnet".parse().unwrap()).predecessor_account_id(agent())
+            .account_balance(NearToken::from_near(100)).block_timestamp(1_700_000_000_000_000_000 + NS_PER_DAY);
+        testing_env!(b.build());
+        let s = c.agent_charge_inference(owner(), U128(5 * MILLI), "m".into(), "p".into(), "j3".into());
+        assert_eq!(s.spent_today.0, 5 * MILLI);
+        assert_eq!(s.budget.0, NEAR - 11 * MILLI);
+    }
+
+    #[test]
+    fn inference_fee_goes_to_treasury() {
+        let mut c = setup();
+        ctx(agent(), 0);
+        c.agent_charge_inference(owner(), U128(2 * MILLI), "m".into(), "p".into(), "j".into());
+        let logs = near_sdk::test_utils::get_logs();
+        assert!(logs.iter().any(|l| l.contains("inference_paid") && l.contains("treasury.testnet")));
+        assert_eq!(c.get_config().treasury_id, treasury());
+    }
+
+    #[test]
+    fn kill_switch_blocks_every_agent_method() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        ctx(owner(), 0);
+        c.set_kill_switch(true);
+        ctx(agent(), 0);
+        let charge = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            c.agent_charge_inference(owner(), U128(MILLI), "m".into(), "p".into(), "j".into());
+        }));
+        let mint2 = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { c.agent_mint(owner(), md()); }));
+        let list = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { c.agent_list(t.clone(), U128(100 * MILLI)); }));
+        assert!(charge.is_err() && mint2.is_err() && list.is_err());
+        ctx(owner(), 0);
+        c.set_kill_switch(false);
+        ctx(agent(), 0);
+        c.agent_list(t, U128(100 * MILLI));
+    }
+
+    #[test]
+    #[should_panic(expected = "Agent only")]
+    fn only_agent_can_charge() {
+        let mut c = setup();
+        ctx(accounts(3), 0);
+        c.agent_charge_inference(owner(), U128(MILLI), "m".into(), "p".into(), "j".into());
+    }
+
+    #[test]
+    #[should_panic(expected = "Agent only")]
+    fn only_agent_can_mint() {
+        let mut c = setup();
+        ctx(owner(), 0);
+        c.agent_mint(owner(), md());
+    }
+
+    #[test]
+    #[should_panic(expected = "Agent only")]
+    fn only_agent_can_list() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        ctx(owner(), 0);
+        c.agent_list(t, U128(100 * MILLI));
+    }
+
+    #[test]
+    fn mint_storage_is_paid_from_budget() {
+        let mut c = setup();
+        mint(&mut c);
+        let s = c.get_studio(owner()).unwrap();
+        assert!(s.storage_spent_total.0 > 0);
+        assert_eq!(s.budget.0 + s.storage_spent_total.0, NEAR);
+    }
+
+    #[test]
+    fn nft_payout_routes_studio_share_through_the_budget() {
+        let mut c = setup();
+        let t = mint(&mut c);
+        // primary sale on an external marketplace: 70% owner, 30% to this contract (studio budget)
+        let p = c.nft_payout(t.clone(), U128(NEAR), Some(3)).payout;
+        assert_eq!(p.get(&owner()).unwrap().0, 700 * MILLI);
+        assert_eq!(p.get(&"studio.testnet".parse::<AccountId>().unwrap()).unwrap().0, 300 * MILLI);
+        // after transfer to a collector, a resale pays 90% seller, royalty 7% owner + 3% studio
+        ctx(owner(), 1);
+        let before = c.get_studio(owner()).unwrap().budget.0;
+        c.nft_transfer_payout(buyer(), t.clone(), None, None, U128(NEAR), Some(3));
+        assert_eq!(c.get_studio(owner()).unwrap().budget.0, before + 300 * MILLI);
+        let p = c.nft_payout(t, U128(NEAR), Some(3)).payout;
+        assert_eq!(p.get(&buyer()).unwrap().0, 900 * MILLI);
+        assert_eq!(p.get(&owner()).unwrap().0, 70 * MILLI);
+        assert_eq!(p.get(&"studio.testnet".parse::<AccountId>().unwrap()).unwrap().0, 30 * MILLI);
+        let total: u128 = p.values().map(|v| v.0).sum();
+        assert_eq!(total, NEAR);
+    }
+}

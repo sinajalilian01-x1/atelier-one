@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useStudio } from "@/lib/useStudio";
 import { deriveView, fmtAmt, useNow, useTyped } from "@/lib/view";
-import { txUrl, accountUrl, toNear } from "@/lib/config";
+import { txUrl, accountUrl, toNear, mediaUrl } from "@/lib/config";
 import { ArtCanvas } from "./ArtCanvas";
 import { OwnerPanel } from "./OwnerPanel";
 import { ThemeToggle } from "./ThemeToggle";
@@ -62,7 +62,7 @@ export default function ReceiptSkin() {
                 <div>AI cap/day<b>{v.cap.replace(/0+$/, "").replace(/\.$/, "")} N</b></div>
                 <div>Split<b>{v.split} / {100 - v.split}</b></div>
                 <button className={`rc-kill ${v.st?.kill_switch ? "on" : ""}`} onClick={s.toggleKill} disabled={s.killBusy || v.running || (!s.isDemo && s.account !== s.studioId)} title="Owner kill switch (on-chain)">
-                  Kill switch<b>{s.killBusy ? "…" : v.st?.kill_switch ? "■ ENGAGED" : "● armed"}</b>
+                  Kill switch<b>{s.killBusy ? "…" : v.st?.kill_switch ? (s.killReleaseAt && now ? `■ ENGAGED · ${Math.max(0, Math.ceil((s.killReleaseAt - now) / 1000))}s` : "■ ENGAGED") : "● armed"}</b>
                 </button>
               </div>
             </div>
@@ -84,7 +84,8 @@ export default function ReceiptSkin() {
             </a>
           ))}
           <div className="hr" />
-          <div className="l tot"><span>NET {v.receiptMode === "run" ? "THIS RUN" : "LAST RUN"}</span><span>{fmtAmt(v.netY.toString())} N</span></div>
+          <div className="l tot"><span>STUDIO P&amp;L<i>{100 - v.split}% share − AI − mint</i></span><span>{fmtAmt(v.pl.studioNet.toString())} N</span></div>
+          <div className="l tot own"><span>OWNER&apos;S CUT<i>{v.split}% to {s.studioId.replace(".testnet", "")}</i></span><span>{fmtAmt(v.pl.owner.toString())} N</span></div>
           <div className="l small"><span>AI spend today {v.spent} of {v.cap} N cap</span><span>budget {v.budget}</span></div>
           <Link href="/ledger" className="bc" aria-label="Open the full public ledger" />
           <div className="c small">every line links to NEAR Explorer ↗ · <Link href="/ledger">full ledger</Link></div>
@@ -93,9 +94,9 @@ export default function ReceiptSkin() {
           <div className="t">FRESH OFF THE EASEL</div>
           <div className="row">
             {(s.state?.recent || []).slice(0, 3).map((t: any) => (
-              <a key={t.token_id} href={t.metadata?.media} target="_blank" rel="noreferrer" title={`#${t.token_id} ${t.metadata?.title} · owner ${t.owner_id}`}>
+              <a key={t.token_id} href={mediaUrl(t.metadata?.media)} target="_blank" rel="noreferrer" title={`#${t.token_id} ${t.metadata?.title} · owner ${t.owner_id}`}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={t.metadata?.media} alt={t.metadata?.title} loading="lazy" />
+                <img src={mediaUrl(t.metadata?.media)} alt={t.metadata?.title} loading="lazy" />
               </a>
             ))}
             {[0, 1, 2].slice((s.state?.recent || []).length).map((i) => <span key={i} className={`ph p${i}`} />)}

@@ -6,7 +6,7 @@ Atelier One is **a single agent run under an on-chain policy contract**. The own
 
 Swap the painter for any other agent (a writer, a data labeler, a trading bot with a different contract method) and the same policy pattern still applies: **the agent has a job, the contract has the rules, the owner has the off switch.**
 
-- **Live demo:** https://atelier-one-near.vercel.app (Receipt skin) · https://atelier-one-near.vercel.app/clay (Clay skin) · https://atelier-one-near.vercel.app/ledger (public ledger)
+- **Live demo:** https://atelier-one-near.vercel.app (Autumn Fox, the main design) · https://atelier-one-near.vercel.app/ledger (public ledger) · other looks of the same loop: [/receipt](https://atelier-one-near.vercel.app/receipt), [/clay](https://atelier-one-near.vercel.app/clay)
 - **Network:** NEAR **testnet**. Everything below is a real on-chain transaction.
 - **Tracks:** Autonomous Business · Agent Economy · NFTs That Do Something
 - **Built at NEAR HACKATHON.** Sina's other entry, **Muse Swarm**, is a separate project: **a multi-agent swarm** of four AI robots working together in a low-poly 3D room. Atelier One is the opposite design. It has one agent, one owner and one business, and the safety lives in a contract, not in agent-to-agent coordination.
@@ -19,26 +19,38 @@ Swap the painter for any other agent (a writer, a data labeler, a trading bot wi
 | Demo owner (the studio's owner). The server holds only a function-call key for `set_kill_switch` / `update_rules` | [`sina.atelier-one.testnet`](https://testnet.near.rocks/account/sina.atelier-one.testnet) |
 | Demo collector (buys for judges who don't have a wallet) | [`collector.atelier-one.testnet`](https://testnet.near.rocks/account/collector.atelier-one.testnet) |
 
+![Atelier One: a low-poly fox painting at an easel in an autumn forest, with the live studio cards](docs/fox-desktop.jpg)
+
 ## Try it in 2 minutes (do X → see Y)
 
-1. **Open https://atelier-one-near.vercel.app.** You see a lime studio. The canvas is on the left, next to the *Artist is thinking*, *Loop* and *Owner rules* cards. A thermal **Studio Receipt** on the right shows the last run's real lines.
-2. **Press the orange START button.** It changes to **LIVE** and starts counting seconds. The brush starts sketching.
-3. **Watch *Generate*.** The artist picks a motif, palette, title and price and paints it stroke by stroke. The painting is pinned to IPFS, and the agent pays for the inference out of the studio budget (`agent_charge_inference`). The contract sends the fee to the treasury. The receipt prints **AI inference −0.002 → treasury**, and *Generate* gets a ✓ and a `tx↗` link.
-4. **Watch *Mint NEP-171*.** `agent_mint` mints the token to the owner with NEP-177 metadata (IPFS media + sha256 `media_hash`). Its storage is paid from the budget at the exact number of bytes the token adds, so the receipt prints **Mint "…" −0.00x**. The media is a bare IPFS CID resolved through the contract's NEP-177 `base_uri`, and the description is kept short.
-5. **Watch *List at ≥ floor*.** `agent_list` lists the token at the artist's price. The contract rejects any price under the owner's floor, and the receipt prints **List #N @ price · rule kept**.
-6. **Collector buys.** A bar appears over the canvas.
-   - No wallet: **Demo collector buys** (it fires automatically after 3 s). `collector.atelier-one.testnet` calls `buy` and attaches the price in testnet NEAR.
-   - Your own wallet: click **Connect NEAR**, sign in with a testnet wallet (MyNearWallet, Meteor or HERE), press START, then pick **Buy with my wallet** (you get 15 s before the demo collector steps in).
-7. **Watch *Auto-split payout*.** The same `buy` transaction pays the owner 70% (→ Owner 70%) and puts 30% back into the artist's AI budget (→ Studio 30%). The receipt shows two separate totals:
-   - **STUDIO P&L**: the studio's 30% share minus AI and mint costs, so you can see whether the agent's business pays for itself.
-   - **OWNER'S CUT**: the 70% that went to the owner's wallet.
+1. **Open https://atelier-one-near.vercel.app.** You see an autumn forest at dusk. A low-poly fox in a scarf sits on a stump and paints at an easel, next to a brass gramophone, a log cabin with lit windows and a stream. The easel shows the studio's **newest real NFT**. Four glass cards sit over the scene:
+   - **Painting** (bottom left): the current or last artwork, a progress bar and six steps: *Pay AI · Paint · Mint · List · Sell · Split*.
+   - **Owner rules** (top right): price floor, AI cap per day, split 70/30, AI spent today and the kill switch.
+   - **Autumn Notes** (right): the studio radio. Press ▶ to hear it.
+   - **Studio session** (bottom right): the last real run, with *Owner earned*, the 70/30 payout, AI + mint costs, the studio P&L and a link to the sale transaction.
+2. **Press the orange *Start studio* button** (top right; on a phone it is under the headline). It changes to **Working… Ns** and the music starts.
+3. **Watch *Pay AI* and *Paint*.** The agent pays for its inference out of the studio budget (`agent_charge_inference`, fee → treasury), then the artwork appears on the 3D easel stroke by stroke and in the Painting card. The artwork is pinned to IPFS. Both chips turn green and link to the transaction. The Studio session card prints **AI inference −0.002**.
+4. **Watch *Mint*.** `agent_mint` mints the token to the owner as NEP-171 with NEP-177 metadata (IPFS media + sha256 `media_hash`). Storage is paid from the budget, so the card prints **Mint "…" −0.00x**.
+5. **Watch *List*.** `agent_list` lists the token at the artist's price. The contract rejects any price under the owner's floor, and the card prints **List #N @ price · floor … · rule kept**.
+6. **Watch *Sell*.** A card asks who buys:
+   - No wallet: the **Demo collector** buys after 3 s. `collector.atelier-one.testnet` calls `buy` and attaches the price in testnet NEAR.
+   - Your own wallet: click **Own a studio**, connect a testnet wallet (MyNearWallet, Meteor or HERE), press Start, then pick **Buy with my wallet** (you get 15 s).
+7. **Watch *Split*.** The same `buy` transaction pays the owner 70% and puts 30% back into the artist's AI budget. The Studio session card flips to **this run** and shows **Owner earned**, *Owner (70%)*, *Studio AI budget (30%)*, *AI bill + mint storage* and **Studio P&L** (the studio's 30% minus its costs, so you can see whether the agent pays for itself). The button now reads **Paint another**. A full loop takes about 60 s.
+8. **Click any green chip or *Sale + split in one transaction ↗*.** It opens the transaction on NEAR Rocks, the explorer that explorer.testnet.near.org recommends. Each hash works on NearBlocks too.
+9. **Click *Ledger* in the top bar to open `/ledger`.** It lists every line from every run, rebuilt from the contract's `atelier_one` NEP-297 events.
+10. **Pull the kill switch.** Flip the switch in *Owner rules*. The demo owner signs `set_kill_switch(true)` on-chain and the card shows **ENGAGED**. Press Start: the artist tries to pay for compute and **the contract refuses** (the *Pay AI* chip turns red with a link to the failed transaction). Flip it back to release it. The demo studio is shared by every visitor, so **an engaged demo kill switch releases itself after 60 s** (the card shows the countdown). Kill switches on your own studio never auto-release.
+11. **Open your own studio.** Click **Own a studio**, connect a wallet, fill in name, style, floor, AI cap per day, owner split %, resale royalty % and starting budget (minimum 0.1 NEAR), then **Open studio & fund**. Press **Run my studio** and Start. The first time, your wallet asks you to **sign a message (NEP-413)**: "Atelier One: run studio <you> until <time>". The server runs the agent for a non-demo studio only with that owner signature (a full-access key of the owner account, valid 12 h). Sales then pay your wallet.
+12. **Scroll down** for *How it works* (four steps), live totals read from the contract (works minted, sold, NEAR paid to the owner, AI budget left) and the gallery of minted works.
+13. **Other looks.** The footer links the same loop in other designs: `/receipt` (thermal receipt), `/clay` (clay desk) and the 3D scenes `/s/lake`, `/s/island`, `/s/robot`. `/s/fox` is the same page as `/`.
 
-   The button then reads **AGAIN**.
-8. **Click any receipt line or `tx↗`.** It opens the transaction on NEAR Rocks, the explorer that explorer.testnet.near.org recommends. Each hash works on NearBlocks too.
-9. **Click the barcode or *ledger* to open `/ledger`.** It lists every line from every run, rebuilt from the contract's `atelier_one` NEP-297 events.
-10. **Pull the kill switch.** Click **Kill switch ● armed** in *Owner rules*. The demo owner signs `set_kill_switch(true)` on-chain, and the card turns red (**■ ENGAGED**). Press START: the artist tries to pay for compute and **the contract refuses** (*Agent blocked · Kill switch engaged*, with a link to the failed transaction). Click the switch again to release it. The demo studio is shared by every visitor, so **an engaged demo kill switch releases itself after 60 s**. The UI shows the countdown, and the next page load or poll signs the release on-chain. A judge never lands on a paused demo. Kill switches on your own studio never auto-release.
-11. **Open your own studio.** Connect a wallet, then fill in *Own a studio*: name, style, floor, AI cap per day, owner split %, resale royalty % and starting budget (minimum 0.1 NEAR). Then click **Open studio & fund**. Press **Run my studio** and START. The first time, your wallet asks you to **sign a message (NEP-413)**: "Atelier One: run studio <you> until <time>". The server runs the agent for a non-demo studio only with that owner signature, made with a full-access key of the owner account and valid for 12 h. Now the artist paints to your style, and sales pay your wallet. Buy your own studio's work from a second wallet: the demo collector only buys from the demo studio.
-12. **Switch skins** with the *Receipt / Clay* toggle in the corner (or open `/clay` or `/?theme=clay`). The clay desk runs the same loop on the same chain data.
+<img src="docs/fox-mobile.jpg" alt="Atelier One on a phone" width="300" />
+
+### Design and loading
+- The scene is **procedural three.js** (react-three-fiber): no model files, everything is vertex-coloured, flat-shaded and instanced (trees, pines, stones, leaves, grass), so the forest is a few dozen draw calls.
+- **The page paints a static poster first** (a compressed WebP of the same scene, 23 KB on phones), then loads the 3D when the browser is idle and cross-fades to it.
+- Quality steps down on its own: phones and low-end devices get a **lite** scene (fewer instances, no shadows, no bloom, DPR ≤ 1.25); a frame-time watchdog drops full → lite below ~28 fps and lite → poster below ~12 fps; machines without a GPU (software WebGL) or with *reduced motion* keep the poster with CSS fireflies. Add `?3d=1` to force the 3D, `?lite=1` for the lite scene.
+- **Music:** "Autumn Notes" is generated live in the browser with WebAudio (`lib/lofi.ts`: synthesised chords, melody, drums and vinyl crackle). There are no samples or audio files, so there is no third-party license. It only starts after a click.
+- Artwork images go through `/api/media/<cid>`, a same-origin, CDN-cached copy of the IPFS file (the on-chain metadata still points at IPFS).
 
 ## The business model (where every yoctoNEAR goes)
 
@@ -63,7 +75,7 @@ Swap the painter for any other agent (a writer, a data labeler, a trading bot wi
 ## How it works
 
 ```
-Browser (Next.js 16, Receipt/Clay skins, NEAR Wallet Selector)
+Browser (Next.js 16, Autumn Fox 3D scene + Receipt/Clay skins, NEAR Wallet Selector)
   │ START
   ├─ POST /api/agent/generate ─► NEAR AI Cloud (or local painter) ─► Pinata IPFS
   │                              └─► artist FC key: agent_charge_inference(studio, cost)   [tx 1]
@@ -116,7 +128,7 @@ near account add-key <agent>.testnet grant-function-call-access --allowance unli
 
 # web app
 cp .env.example .env.local   # fill in the keys (never commit them)
-npm install && npm run dev   # http://localhost:3000, /clay, /ledger
+npm install && npm run dev   # http://localhost:3000 (fox), /receipt, /clay, /ledger
 ```
 
 Set `NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_AGENT_ID`, `NEXT_PUBLIC_DEMO_STUDIO_ID` and `NEXT_PUBLIC_COLLECTOR_ID` if you use your own accounts.

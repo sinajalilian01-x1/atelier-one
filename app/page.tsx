@@ -1,8 +1,10 @@
-import { redirect } from "next/navigation";
-import ReceiptSkin from "@/components/ReceiptSkin";
+import { Fraunces } from "next/font/google";
+import FoxStudio from "@/components/fox/FoxStudio";
+import "./fox.css";
 
-export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const sp = await searchParams;
-  if (sp.theme === "clay") redirect("/clay");
-  return <ReceiptSkin />;
+const fraunces = Fraunces({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--f-serif" });
+
+// "/?theme=clay" and "/?theme=receipt" are redirected in next.config.ts, so this page can be fully static.
+export default function Home() {
+  return <div className={fraunces.variable}><FoxStudio /></div>;
 }

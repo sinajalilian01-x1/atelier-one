@@ -207,7 +207,7 @@ export default function SceneSkin({ skin }: { skin: SceneKey }) {
         <nav className="sk-switch" aria-label="Skin">
           {ORDER.map((k) => <Link key={k} href={`/s/${k}`} className={k === skin ? "on" : ""}>{SKINS[k].label}</Link>)}
           <Link href="/clay">Clay</Link>
-          <Link href="/">Receipt</Link>
+          <Link href="/receipt">Receipt</Link>
         </nav>
       </section>
 

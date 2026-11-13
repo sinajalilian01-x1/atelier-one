@@ -22,7 +22,7 @@ export default function ReceiptSkin() {
     <div className="rc">
       <section className="rc-left">
         <nav className="rc-nav">
-          <Link href="/" className="rc-logo">atelier one<span /></Link>
+          <Link href="/receipt" className="rc-logo">atelier one<span /></Link>
           <div className="rc-menu"><a href="#studio">studio</a><a href="#works">works</a><Link href="/ledger">ledger</Link><a href="#rules">rules</a></div>
           <button className="rc-wb" onClick={() => setPanel(true)}>{s.account ? s.account.replace(".testnet", "") : "Connect NEAR"}</button>
         </nav>

@@ -11,7 +11,7 @@ export default function LedgerView() {
   const rows = (entries || []).flatMap((e) => linesFor(e).map((l) => ({ ...l, signer: (e as any).signerId as string })));
   return (
     <main className="lv">
-      <nav><Link href="/" className="rc-logo">atelier one<span /></Link><span><Link href="/">receipt</Link> · <Link href="/clay">clay</Link></span></nav>
+      <nav><Link href="/" className="rc-logo">atelier one<span /></Link><span><Link href="/receipt">receipt</Link> · <Link href="/">fox</Link> · <Link href="/clay">clay</Link></span></nav>
       <h1>Public ledger</h1>
       <p>Every cost, sale and payout the studio made, rebuilt from the <code>atelier_one</code> events of <a href={accountUrl(CONTRACT_ID)} target="_blank" rel="noreferrer">{CONTRACT_ID}</a> on NEAR testnet. Click any row to open the transaction on NEAR Rocks (the explorer recommended by explorer.testnet.near.org); every hash also works on NearBlocks.</p>
       {!entries ? <p>Loading…</p> : (

@@ -13,6 +13,12 @@ export const nearblocksTxUrl = (h: string) => `https://testnet.nearblocks.io/txn
 export const IPFS_GATEWAY = "https://gateway.pinata.cloud/ipfs/";
 /** NEP-177: new tokens store a bare CID and the contract's base_uri is the IPFS gateway. */
 export const mediaUrl = (m?: string | null) => (!m ? "" : /^(https?:|data:)/.test(m) ? m : IPFS_GATEWAY + m.replace(/^ipfs:\/\//, ""));
+/** For <img>/textures: the same artwork through our CDN-cached same-origin proxy (/api/media/<cid>). Links keep mediaUrl. */
+export const imgUrl = (m?: string | null) => {
+  if (!m) return "";
+  const cid = m.replace(/^ipfs:\/\//, "").replace(/^https?:\/\/[^/]+\/ipfs\//, "");
+  return /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,100})$/.test(cid) ? `/api/media/${cid}` : mediaUrl(m);
+};
 /** Hard cap on what the demo collector will pay for one work (yoctoNEAR). */
 export const DEMO_COLLECTOR_MAX = 250_000_000_000_000_000_000_000n; // 0.25 NEAR
 export const YOCTO = 10n ** 24n;

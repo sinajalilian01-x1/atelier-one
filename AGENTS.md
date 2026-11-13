@@ -16,12 +16,12 @@ Read `README.md` for the product. This file is for coding agents and humans chan
 | `lib/near.ts` | RPC (failover), server-side signing, outcome/event parsing |
 | `lib/ai.ts`, `lib/art.ts`, `lib/ipfs.ts` | NEAR AI Cloud (when `NEAR_AI_API_KEY` is set) or the local SVG painter; Pinata pinning |
 | `lib/useStudio.ts`, `lib/view.ts`, `lib/lines.ts` | Client state machine for the loop; receipt lines and the studio P&L vs owner cut |
-| `components/fox/*` (`/` and `/s/fox`, the main design), `components/ReceiptSkin.tsx` (`/receipt`), `components/ClaySkin.tsx` (`/clay`), `components/scenes/*` (`/s/lake`, `/s/island`, `/s/robot`) | Skins over the same `useStudio()` hook. Keep them behaviorally identical. The fox scene is procedural three.js in `components/fox/FoxWorld.tsx` + `geo.ts`; its poster images live in `public/fox/` (re-render them with `?3d=1&hq=1&clean=1` after changing the scene) |
+| `components/dream/*` (`/`, the main design: Dream Island; host UI is `components/fox/FoxStudio.tsx` with `world="dream"`), `components/fox/*` (`/s/fox`, `/s/fox-classic`), `components/ReceiptSkin.tsx` (`/receipt`), `components/ClaySkin.tsx` (`/clay`), `components/scenes/*` (`/s/lake`, `/s/island`, `/s/robot`) | Skins over the same `useStudio()` hook. Keep them behaviorally identical. The fox scene is procedural three.js in `components/fox/FoxWorld.tsx` + `geo.ts`; its poster images live in `public/fox/`; the dream island's in `public/dream/` (re-render with `?3d=1&hq=1&clean=1&dusk=0.29` after changing the scene; debug params: `zoom=1`, `paint=1`, `perch=1`, `lantern=1`, `fox=curl|sniff`, `dusk=0..1`) |
 
 ## Commands
 ```bash
 npm install
-npm run dev                      # http://localhost:3000  (/ fox, /receipt, /clay, /ledger)
+npm run dev                      # http://localhost:3000  (/ dream island, /s/fox, /receipt, /clay, /ledger)
 npx tsc --noEmit                 # typecheck
 npm run build                    # production build
 cd contract && cargo test        # 12 unit tests: floor, daily cap, kill switch, split math, agent-only, payout, treasury

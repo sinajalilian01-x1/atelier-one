@@ -5,6 +5,7 @@ import "./fox.css";
 const fraunces = Fraunces({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--f-serif" });
 
 // "/?theme=clay" and "/?theme=receipt" are redirected in next.config.ts, so this page can be fully static.
+// The main design is the Dream Island; the classic Autumn Fox lives at /s/fox (and /s/fox-classic).
 export default function Home() {
-  return <div className={fraunces.variable}><FoxStudio /></div>;
+  return <div className={fraunces.variable}><FoxStudio world="dream" /></div>;
 }

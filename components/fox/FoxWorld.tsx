@@ -12,8 +12,8 @@ import { autumnTree, groundH, jitter, paint, pineTree, rockGeo, solid, STREAM, s
 export interface FoxWorldProps { art: ArtSource | null; sketching: boolean; working: boolean; playing: boolean; lite: boolean }
 
 // ---------- generic instancing ----------
-type Inst = { p: V3; s?: V3 | number; r?: V3; c?: string };
-function Instances({ geo, items, mat, shadow = false, receive = false }: { geo: THREE.BufferGeometry; items: Inst[]; mat: THREE.Material; shadow?: boolean; receive?: boolean }) {
+export type Inst = { p: V3; s?: V3 | number; r?: V3; c?: string };
+export function Instances({ geo, items, mat, shadow = false, receive = false }: { geo: THREE.BufferGeometry; items: Inst[]; mat: THREE.Material; shadow?: boolean; receive?: boolean }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   useEffect(() => {
     const m = ref.current; if (!m) return; const o = new THREE.Object3D(); const c = new THREE.Color();
@@ -25,11 +25,11 @@ function Instances({ geo, items, mat, shadow = false, receive = false }: { geo: 
   }, [items]);
   return <instancedMesh ref={ref} args={[geo, mat, items.length]} castShadow={shadow} receiveShadow={receive} frustumCulled={false} />;
 }
-const vmat = (o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0, ...o });
+export const vmat = (o: THREE.MeshStandardMaterialParameters = {}) => new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9, metalness: 0, ...o });
 const mcache = new Map<string, THREE.MeshStandardMaterial>();
-const M = (color: string, o: THREE.MeshStandardMaterialParameters = {}) => { const k = color + JSON.stringify(o); if (!mcache.has(k)) mcache.set(k, new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85, ...o })); return mcache.get(k)!; };
+export const M = (color: string, o: THREE.MeshStandardMaterialParameters = {}) => { const k = color + JSON.stringify(o); if (!mcache.has(k)) mcache.set(k, new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.85, ...o })); return mcache.get(k)!; };
 const ico = (d = 1, j = 0.08, seed = 1) => { const g = jitter(new THREE.IcosahedronGeometry(1, d), j, rand(seed)); g.computeVertexNormals(); return g; };
-const GEO = {
+export const GEO = {
   ico0: ico(0, 0.1, 2), ico1: ico(1, 0.07, 3), ico1b: ico(1, 0.1, 4),
   cone4: new THREE.ConeGeometry(1, 1, 4), cone5: new THREE.ConeGeometry(1, 1, 5), cone6: new THREE.ConeGeometry(1, 1, 6),
   cyl6: new THREE.CylinderGeometry(1, 1, 1, 6), cyl8: new THREE.CylinderGeometry(1, 1, 1, 8), cyl16: new THREE.CylinderGeometry(1, 1, 1, 16),
@@ -170,7 +170,7 @@ function useDab(active: boolean) {
   useFrame(({ clock }) => { const g = ref.current; if (!g) return; const t = clock.elapsedTime; const a = active ? 1 : 0.3; g.rotation.x = -1.15 + Math.sin(t * 3.2) * 0.16 * a; g.rotation.y = Math.sin(t * 1.6) * 0.12 * a; });
   return ref;
 }
-function Palette() {
+export function Palette() {
   const geo = useMemo(() => {
     const s = new THREE.Shape(); s.absellipse(0, 0, 0.26, 0.19, 0, Math.PI * 2, false, 0);
     const h = new THREE.Path(); h.absellipse(-0.14, -0.04, 0.04, 0.035, 0, Math.PI * 2, true, 0); s.holes.push(h);
@@ -184,7 +184,7 @@ function Palette() {
     </group>
   );
 }
-function Brush({ tip = "#E8582E" }: { tip?: string }) {
+export function Brush({ tip = "#E8582E" }: { tip?: string }) {
   return (
     <group>
       <mesh geometry={GEO.cyl6} material={M("#7A2E22")} position={[0, -0.22, 0]} scale={[0.018, 0.44, 0.018]} />
@@ -296,7 +296,7 @@ function Fox({ working }: { working: boolean }) {
 }
 
 // ---------- easel ----------
-function Easel({ art, sketching }: { art: ArtSource | null; sketching: boolean }) {
+export function Easel({ art, sketching }: { art: ArtSource | null; sketching: boolean }) {
   const tex = useArtTexture(art, sketching);
   const w = M("#9A6538"), w2 = M("#7C4E2C");
   return (
@@ -325,7 +325,7 @@ function Easel({ art, sketching }: { art: ArtSource | null; sketching: boolean }
 }
 
 // ---------- gramophone + notes ----------
-function Gramophone({ playing }: { playing: boolean }) {
+export function Gramophone({ playing }: { playing: boolean }) {
   const disc = useRef<THREE.Mesh>(null);
   useFrame((_, dt) => { if (disc.current) disc.current.rotation.y += dt * (playing ? 3.4 : 0.4); });
   const brass = useMemo(() => new THREE.MeshStandardMaterial({ color: "#E0A848", metalness: 0.85, roughness: 0.3, side: THREE.DoubleSide, emissive: "#5A3410", emissiveIntensity: 0.25 }), []);
@@ -365,7 +365,7 @@ function noteShapes() {
   const b = new THREE.ExtrudeGeometry([h1, h2, st], { depth: 0.035, bevelEnabled: false, curveSegments: 8 });
   return [a, b];
 }
-function Notes({ origin, playing, count }: { origin: V3; playing: boolean; count: number }) {
+export function Notes({ origin, playing, count }: { origin: V3; playing: boolean; count: number }) {
   const geos = useMemo(() => noteShapes(), []);
   const refs = useRef<(THREE.Mesh | null)[]>([]);
   const mats = useMemo(() => Array.from({ length: count }, () => new THREE.MeshBasicMaterial({ color: "#FFC24A", transparent: true, opacity: 0, toneMapped: false, depthWrite: false, side: THREE.DoubleSide })), [count]);
@@ -382,7 +382,7 @@ function Notes({ origin, playing, count }: { origin: V3; playing: boolean; count
 }
 
 // ---------- log cabin ----------
-function Window({ p, rot = 0, glow, winGlow, frame }: { p: V3; rot?: number; glow: THREE.Material; winGlow: THREE.SpriteMaterial; frame: THREE.Material }) {
+export function Window({ p, rot = 0, glow, winGlow, frame }: { p: V3; rot?: number; glow: THREE.Material; winGlow: THREE.SpriteMaterial; frame: THREE.Material }) {
   return (
     <group position={p} rotation={[0, rot, 0]}>
       <mesh geometry={GEO.box} material={glow} scale={[0.6, 0.62, 0.04]} />
@@ -396,7 +396,7 @@ function Window({ p, rot = 0, glow, winGlow, frame }: { p: V3; rot?: number; glo
   );
 }
 
-function Cabin({ lite }: { lite: boolean }) {
+export function Cabin({ lite }: { lite: boolean }) {
   const W = 3.6, D = 2.7, rows = 8, LR = 0.12;
   const logGeo = useMemo(() => { const r = rand(8); return paint(jitter(new THREE.CylinderGeometry(1, 1, 1, 7, 2), 0.06, r), (c, f) => { if (Math.abs(f.ny) > 0.9) c.set("#D9A066"); else { c.set(r() > 0.5 ? "#7A4E2E" : "#6A4128"); c.offsetHSL(0, 0, f.nx * 0.03 + (r() - 0.5) * 0.05); } }); }, []);
   const logs = useMemo(() => {
@@ -484,7 +484,7 @@ function Fireflies({ count, area, center }: { count: number; area: V3; center: V
   useFrame(({ clock }) => { mat.uniforms.uTime.value = clock.elapsedTime; mat.uniforms.uScale.value = gl.getPixelRatio() * 1.6; });
   return <points geometry={geo} material={mat} />;
 }
-function FallingLeaves({ count }: { count: number }) {
+export function FallingLeaves({ count }: { count: number }) {
   const ref = useRef<THREE.InstancedMesh>(null);
   const geo = useMemo(() => { const sh = new THREE.Shape(); sh.moveTo(0, -1); sh.quadraticCurveTo(0.9, -0.2, 0, 1); sh.quadraticCurveTo(-0.9, -0.2, 0, -1); return new THREE.ShapeGeometry(sh, 2); }, []);
   const st = useMemo(() => { const r = rand(19); return Array.from({ length: count }, () => ({ x: (r() - 0.5) * 18, y: r() * 7, z: 5 - r() * 14, s: 0.5 + r() * 0.6, ph: r() * 6 })); }, [count]);
@@ -520,7 +520,7 @@ function SkyDome() {
   return <mesh geometry={geo} renderOrder={-1}><meshBasicMaterial vertexColors side={THREE.BackSide} fog={false} depthWrite={false} /></mesh>;
 }
 /** A tiny warm environment map so the brass and water have something to reflect (built once, ~1 ms). */
-function WarmEnv() {
+export function WarmEnv() {
   const { gl, scene } = useThree();
   useEffect(() => {
     const s = new THREE.Scene(); const g = new THREE.SphereGeometry(10, 16, 8); const p = g.attributes.position; const cols: number[] = []; const c = new THREE.Color();

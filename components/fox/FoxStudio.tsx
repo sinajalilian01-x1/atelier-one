@@ -14,6 +14,7 @@ import { Toast } from "../Toast";
 import type { ArtSource } from "../scenes/kit";
 
 const FoxCanvas = dynamic(() => import("./FoxCanvas"), { ssr: false, loading: () => null });
+const DreamCanvas = dynamic(() => import("../dream/DreamCanvas"), { ssr: false, loading: () => null });
 
 export function FoxMark({ size = 46 }: { size?: number }) {
   return (
@@ -95,7 +96,12 @@ function Music({ playing, muted, onPlay, onMute, lofi }: { playing: boolean; mut
   );
 }
 
-export default function FoxStudio() {
+/** world="dream" is the main design (the bearded painter on a floating island); world="fox" is the classic Autumn Fox. */
+export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }) {
+  const dream = world === "dream";
+  const he = dream ? { s: "he", S: "He", p: "his" } : { s: "she", S: "She", p: "her" };
+  const poster = dream ? "/dream/poster" : "/fox/poster";
+  const [zoom, setZoom] = useState(0);
   const s = useStudio();
   // tick the clock only while something is counting (a run, or the demo kill-switch countdown)
   const now = useNow(!['idle', 'done', 'error', 'killed'].includes(s.phase) || !!s.killReleaseAt);
@@ -127,6 +133,8 @@ export default function FoxStudio() {
     return null;
   }, [s.art, recent0]);
   const sketching = s.phase === "painting" && !s.art;
+  // the robin lands on the easel once the painting is finished; the lantern rises when this run's sale lands
+  const perch = !!s.art && !["idle", "painting", "error"].includes(s.phase);
 
   // ---- session numbers: real ledger lines for this run, or the studio's last real run ----
   const sale = v.lines.find((l) => l.kind === "sale");
@@ -134,6 +142,7 @@ export default function FoxStudio() {
   const pStudio = v.lines.find((l) => l.kind === "payout" && l.who === "studio");
   const costSum = v.lines.filter((l) => l.kind === "cost").reduce((a, l) => a + BigInt(l.amount || "0"), 0n);
   const fresh = v.receiptMode === "run";
+  const saleKey = fresh && s.phase === "done" && sale ? sale.hash : null;
   const st = v.st;
   const title = s.art?.title || (v.running ? null : recent0?.metadata?.title);
   const progress = s.phase === "idle" ? (recent0 ? 100 : 0) : Math.round(s.progress);
@@ -147,13 +156,17 @@ export default function FoxStudio() {
     <div className="fx">
       <section className="fx-hero" id="studio">
         <div className="fx-stage">
-          <link rel="preload" as="image" href="/fox/poster-mobile.webp" media="(max-width: 820px)" fetchPriority="high" />
-          <link rel="preload" as="image" href="/fox/poster.webp" media="(min-width: 821px)" fetchPriority="high" />
+          <link rel="preload" as="image" href={`${poster}-mobile.webp`} media="(max-width: 820px)" fetchPriority="high" />
+          <link rel="preload" as="image" href={`${poster}.webp`} media="(min-width: 821px)" fetchPriority="high" />
           <picture className="fx-poster" data-hide={ready && (mode === "3d" || mode === "lite")}>
-            <source media="(max-width: 820px)" srcSet="/fox/poster-mobile.webp" type="image/webp" />
-            <img src="/fox/poster.webp" alt="" fetchPriority="high" decoding="async" />
+            <source media="(max-width: 820px)" srcSet={`${poster}-mobile.webp`} type="image/webp" />
+            <img src={`${poster}.webp`} alt="" fetchPriority="high" decoding="async" />
           </picture>
-          {(mode === "3d" || mode === "lite") && (
+          {(mode === "3d" || mode === "lite") && dream && (
+            <DreamCanvas art={artSrc} sketching={sketching} working={v.running} playing={playing && !muted} lite={mode === "lite"} perch={perch} saleKey={saleKey} zoom={zoom} onZoom={setZoom}
+              onReady={() => setTimeout(() => setReady(true), 200)} onTooSlow={() => setMode("poster")} />
+          )}
+          {(mode === "3d" || mode === "lite") && !dream && (
             <FoxCanvas art={artSrc} sketching={sketching} working={v.running} playing={playing && !muted} lite={mode === "lite"} onReady={() => setTimeout(() => setReady(true), 200)} onTooSlow={() => setMode("poster")} />
           )}
           {mode === "poster" && <div className="fx-flies" aria-hidden>{Array.from({ length: 14 }, (_, i) => <i key={i} />)}</div>}
@@ -176,8 +189,8 @@ export default function FoxStudio() {
 
         <div className="fx-ui">
           <div className="fx-intro">
-            <h1>An AI fox that runs her own art studio on NEAR.</h1>
-            <p>Press <b>Start studio</b>: she pays her own AI bill, paints, mints an NEP-171, sells it and splits the money with her owner. Real testnet transactions, about a minute.</p>
+            <h1>{dream ? "An AI painter who runs his own art studio on NEAR." : "An AI fox that runs her own art studio on NEAR."}</h1>
+            <p>Press <b>Start studio</b>: {he.s} pays {he.p} own AI bill, paints, mints an NEP-171, sells it and splits the money with {he.p} owner. Real testnet transactions, about a minute.</p>
             <button className="fx-start big" onClick={onStart} disabled={v.running}>{v.running ? <><span className="spin" />Working… {v.elapsed ?? 0}s</> : s.phase === "done" ? <>Paint another<i>▶</i></> : <>Start studio<i>▶</i></>}</button>
           </div>
 
@@ -249,6 +262,17 @@ export default function FoxStudio() {
           </div>
           </div>
         </div>
+        {dream && (mode === "3d" || mode === "lite") && ready && (
+          <div className="fx-zoom" role="group" aria-label="Camera zoom">
+            <button onClick={() => setZoom((z) => Math.min(1, z < 0.5 ? 1 : z + 0.25))} disabled={zoom >= 0.99} aria-label="Zoom out to the whole island" title="Zoom out">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+            <span>{zoom > 0.5 ? "Island" : "Studio"}</span>
+            <button onClick={() => setZoom((z) => Math.max(0, z > 0.5 ? 0 : z - 0.25))} disabled={zoom <= 0.01} aria-label="Zoom back in to the studio" title="Zoom in">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M7.5 10.5h6M10.5 7.5v6M15.5 15.5 20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+        )}
         <a className="fx-scroll" href="#how" aria-label="How it works">How it works ↓</a>
       </section>
 
@@ -258,7 +282,7 @@ export default function FoxStudio() {
           <p className="lead">Atelier One is a one-artist business with its own NEAR account, its own budget and its own books. The owner sets the rules once; the contract enforces them on every transaction.</p>
           <ol>
             <li><i>1</i><b>You set the rules</b><p>Style, price floor, daily AI cap, revenue split ({v.split}/{100 - v.split}), resale royalty and a kill switch, stored in the studio contract.</p></li>
-            <li><i>2</i><b>She pays her own AI bill</b><p>The artist account holds only a function-call key. Each piece starts with <code>agent_charge_inference</code>: the fee leaves the studio budget, capped per day.</p></li>
+            <li><i>2</i><b>{he.S} pays {he.p} own AI bill</b><p>The artist account holds only a function-call key. Each piece starts with <code>agent_charge_inference</code>: the fee leaves the studio budget, capped per day.</p></li>
             <li><i>3</i><b>Paints, mints, lists</b><p>The artwork is pinned to IPFS, minted as an NEP-171 token (NEP-177 metadata) and listed, never below your floor.</p></li>
             <li><i>4</i><b>A sale pays everyone</b><p>A collector buys and the same transaction pays the owner {v.split}% and refills the AI budget with {100 - v.split}%. Resales pay an NEP-199 royalty.</p></li>
           </ol>
@@ -286,10 +310,10 @@ export default function FoxStudio() {
         <footer className="fx-proof">
           <p>
             Contract <a href={accountUrl(s.state?.contractId || "")} target="_blank" rel="noreferrer">{s.state?.contractId}</a> · artist <a href={accountUrl(s.state?.agentId || "")} target="_blank" rel="noreferrer">{s.state?.agentId}</a> · <Link href="/ledger">public ledger</Link><br />
-            Painter: {provider || "…"} · Music: “Autumn Notes”, generated live in your browser with WebAudio (no samples, no license needed) · Scene: procedural three.js, no model files.
+            Painter: {provider || "…"} · Music: “Autumn Notes”, generated live in your browser with WebAudio (no samples, no license needed) · Scene: procedural three.js, no model or texture files.
           </p>
           <p>Built for NEAR HACKATHON · Autonomous Business · Agent Economy · NFTs That Do Something. Sina&apos;s other entry: <b>Muse Swarm</b>, a four-robot swarm in a low-poly 3D room.</p>
-          <p className="looks">Other looks: <Link href="/receipt">Receipt</Link> · <Link href="/clay">Clay</Link> · <Link href="/s/lake">Lake</Link> · <Link href="/s/island">Island</Link> · <Link href="/s/robot">Robot</Link></p>
+          <p className="looks">Other looks: {dream ? <Link href="/s/fox">Autumn Fox</Link> : <Link href="/">Dream Island</Link>} · <Link href="/receipt">Receipt</Link> · <Link href="/clay">Clay</Link> · <Link href="/s/lake">Lake</Link> · <Link href="/s/island">Island</Link> · <Link href="/s/robot">Robot</Link></p>
         </footer>
       </section>
       <Toast toast={s.toast} onClose={() => s.setToast(null)} />

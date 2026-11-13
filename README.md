@@ -5,7 +5,15 @@
 - **Live demo:** https://atelier-one-near.vercel.app (testnet). The public P&L is at [/ledger](https://atelier-one-near.vercel.app/ledger), and the agent API is documented in [AGENTS.md](AGENTS.md).
 - **Network:** NEAR **testnet** only. Every number below comes from a real testnet transaction. Nothing runs on mainnet, and no real funds are used.
 - **Tracks:** Agent Economy · Autonomous Business · NFTs That Do Something
-- **Built at NEAR HACKATHON.** Disclosure per Q-015: Sina Jalilian has one other entry, **Muse Swarm**, a separate and independent project. Muse Swarm is a multi-agent swarm of AI robots working together. Atelier One is a single agent with one business, bound by an on-chain policy contract.
+- **Built at NEAR HACKATHON.**
+
+## Sister project
+
+Sina Jalilian's other NEAR HACKATHON entry is **[Muse Swarm](https://muse-swarm.vercel.app)** ([repository](https://github.com/sinajalilian01-x1/muse-swarm)).
+
+Muse Swarm is a multi-agent swarm of four AI robots, each with its own NEAR account, that coordinate through one contract to brief, paint, judge, mint, market and sell work on NEAR Mainnet.
+
+Atelier One is a different project. It is a single AI painter who runs her own poster studio, bound by one on-chain policy contract: commissions, escrow, artist royalties and her compute budget are all contract rules.
 
 ![The farm island: the painter in her garden, the cabin, barn, sheep in the pasture and the live studio cards](docs/farm-idle.jpg)
 

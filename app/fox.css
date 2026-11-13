@@ -213,7 +213,7 @@
 .fx-clean .fx-zoom,.fx-og .fx-zoom{display:none}
 @media (max-width:820px){.fx-zoom{bottom:auto;top:84px;left:auto;right:12px;transform:none}}
 /* ---------- chat commission ---------- */
-.cm{position:absolute;right:22px;top:84px;width:min(420px,calc(100vw - 24px));max-height:calc(100svh - 110px);overflow:auto;z-index:30;padding:14px 16px 16px;scrollbar-width:thin}
+.cm{position:absolute;right:22px;top:84px;width:min(420px,calc(100vw - 24px));max-height:calc(100svh - 110px);overflow:auto;z-index:30;padding:14px 16px 16px;scrollbar-width:thin;background:rgba(46,28,18,.94)}
 .cm-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}.cm-hd b{font:600 19px var(--serif)}.cm-hd small{color:var(--dim);font-size:12px}
 .cm-hd .x{margin-left:auto;background:none;border:0;color:var(--muted);font-size:24px;line-height:1;cursor:pointer}
 .cm-msg{margin:6px 0;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.4;max-width:92%}
@@ -273,3 +273,5 @@
 .fx-tod button:hover:not(.on){background:rgba(255,200,140,.2)}
 .fx-clean .fx-tod,.fx-og .fx-tod{display:none}
 @media (max-width:820px){.fx-tod{bottom:auto;left:auto;top:134px;right:12px}}
+/* while the commission chat is open, the right-hand studio cards step aside so the chat reads cleanly */
+@media (min-width:821px){.cm-open .fx-col,.cm-open .fx-rules{opacity:0;pointer-events:none;transition:opacity .25s}}

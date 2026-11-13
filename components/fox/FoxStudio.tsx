@@ -167,7 +167,7 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
 
   return (
     <div className="fx">
-      <section className="fx-hero" id="studio">
+      <section className={`fx-hero${dream && cmOpen ? " cm-open" : ""}`} id="studio">
         <div className="fx-stage">
           <link rel="preload" as="image" href={`${poster}-mobile.webp`} media="(max-width: 820px)" fetchPriority="high" />
           <link rel="preload" as="image" href={`${poster}.webp`} media="(min-width: 821px)" fetchPriority="high" />

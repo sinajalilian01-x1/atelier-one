@@ -2,7 +2,7 @@ import { toNear } from "./config";
 import type { ChainEvent } from "./events";
 
 export type LineKind = "cost" | "sale" | "royalty" | "payout" | "info" | "fund" | "fail";
-export interface Line { key: string; label: string; sub: string; amount: string | null; kind: LineKind; hash: string; at: number; studioId: string; who?: "owner" | "studio" }
+export interface Line { key: string; label: string; sub: string; amount: string | null; kind: LineKind; hash: string; at: number; studioId: string; who?: "owner" | "studio" | "artist" }
 export interface EntryLike { hash: string; at: number; ok: boolean; error?: string; title?: string; action: string; studioId: string; events: ChainEvent[] }
 
 const short = (a: string) => (a && a.length > 22 ? a.slice(0, 20) + "…" : a);
@@ -26,8 +26,15 @@ export function linesFor(e: EntryLike): Line[] {
         const ob = Number(d.split_owner_bps) / 100;
         L.push({ ...base, key: k + "o", label: `→ Owner ${ob}%`, sub: short(d.owner_id), amount: d.owner_amount, kind: "payout", who: "owner" });
         L.push({ ...base, key: k + "s", label: `→ Studio ${100 - ob}%`, sub: "AI budget refill", amount: d.studio_amount, kind: "payout", who: "studio" });
+        if (d.artist_id && d.artist_amount && d.artist_amount !== "0") L.push({ ...base, key: k + "a", label: "→ Artist royalty", sub: short(d.artist_id), amount: d.artist_amount, kind: "payout", who: "artist" });
         break;
       }
+      case "commissioned": L.push({ ...base, key: k, label: `Commission #${d.commission_id} paid into escrow`, sub: `${d.style_id} · buyer ${short(d.buyer_id)}`, amount: null, kind: "info" }); break;
+      case "commission_delivered":
+        L.push({ ...base, key: k, label: `COMMISSION #${d.commission_id} delivered`, sub: `NEP-171 #${d.token_id} → ${short(d.buyer_id)}`, amount: d.price, kind: "sale" });
+        L.push({ ...base, key: k + "st", label: `Mint storage #${d.token_id}`, sub: "paid by the studio", amount: "-" + d.storage_cost, kind: "cost" });
+        break;
+      case "commission_refunded": L.push({ ...base, key: k, label: `Commission #${d.commission_id} refunded`, sub: short(d.buyer_id), amount: null, kind: "info" }); break;
       case "payout_split": {
         L.push({ ...base, key: k + "m", label: `Marketplace sale #${d.token_id}`, sub: "NEP-199 payout", amount: d.balance, kind: "sale" });
         L.push({ ...base, key: k + "o", label: "→ Owner share", sub: "via nft_payout", amount: d.owner_amount, kind: "payout", who: "owner" });

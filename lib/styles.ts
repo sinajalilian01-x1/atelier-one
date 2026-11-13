@@ -30,7 +30,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "sina-neon", name: "Sina Jalilian", style: "Neon Mark", human: true, artist: "sina.atelier-one.testnet", artistBps: 2000, minNear: 0.08,
-    tagline: "Real artist: Sina's own neon style, he earns 20% of the commission on-chain",
+    tagline: "Real artist: Sina's own neon style; Sina earns 20% of every commission on-chain",
     colors: ["#07080B", "#FF3B5C", "#3DF2E0"],
     imagePrompt: (s) => `${s}. Night scene lit by hot coral-red and cyan neon rim light, deep black background, cinematic, glossy reflections, high contrast, no text, no letters, no words.`,
   },

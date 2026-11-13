@@ -40,8 +40,10 @@ Return JSON: {"title": "poster headline, max 32 chars, from the brief", "subtitl
       pitches: { "paper-fox": "Warm cut paper, soft shadows, made to hang in a kitchen.", "grid-ink": "Big type, one hot colour, readable from across the street.", "sina-neon": "Sina's neon rim light on black: built to glow on a wall." } };
   }
   const cx = Math.min(3, Math.max(1, Number(data.complexity) || 2));
+  // the contract also enforces the studio owner's price floor, so no bid goes below it
+  const floor = await view<{ floor: string } | null>("get_studio", { studio_id: DEMO_STUDIO_ID }).then((s) => (s ? Number(BigInt(s.floor) / 10n ** 18n) / 1e6 : 0)).catch(() => 0.05);
   const bids: Bid[] = PERSONAS.map((p) => {
-    const priceNear = round(p.minNear * (1 + 0.2 * (cx - 1)));
+    const priceNear = Math.max(round(p.minNear * (1 + 0.2 * (cx - 1))), Math.ceil(floor * 200) / 200);
     return { styleId: p.id, persona: p.name, style: p.style, human: p.human, artist: p.artist, artistBps: p.artistBps, priceNear, priceYocto: nearToYocto(priceNear), pitch: clean(data.pitches?.[p.id], 120) || p.tagline };
   });
   const quote: Quote = {

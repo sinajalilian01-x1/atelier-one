@@ -263,3 +263,13 @@ a.lv-row:hover{background:#F3F8E6}
   .rc-start{width:106px;height:106px;font-size:15px;padding:0 10px;box-shadow:0 6px 0 #0E0E0E}
   .rc-start small{font-size:8.5px;max-width:76px}
 }
+.lv{background:#F4EDE2;color:#2E1F14}
+.lv h1{font-family:var(--f-syne),sans-serif;font-size:44px;letter-spacing:-1.5px;margin:0}
+.lv h2{font-family:var(--f-syne),sans-serif;font-size:24px;margin:36px 0 0}
+.lv a{color:#B4482A}
+.lv-logo{font-weight:800;color:#2E1F14!important;text-decoration:none}
+.lv-board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;max-width:1100px}
+.lv-k{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 10px 24px #4a2a1218;display:flex;flex-direction:column;gap:4px;min-width:0}
+.lv-k small{font-size:12px;color:#7A6656}.lv-k b{font-size:22px}.lv-k i{font-style:normal;font-size:12px;color:#8A7564;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lv-k.big b{font-size:28px}.lv-k.cost b{color:#B4482A}.lv-k.pos b{color:#2F7A45}.lv-k.neg b{color:#B4482A}
+@media (max-width:900px){.lv{padding:20px 16px 60px}.lv-board{grid-template-columns:1fr 1fr}.lv h1{font-size:32px}}

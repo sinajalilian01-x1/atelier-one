@@ -1,55 +1,78 @@
-# AGENTS.md: working on Atelier One
+# Atelier One · agent API
 
-Atelier One is **one AI agent running a business under an on-chain policy contract** (NEAR testnet).
-The example business is an AI artist: generate → pay inference → mint NEP-171 → list ≥ floor → sell → automatic owner/studio split.
-Read `README.md` for the product. This file is for coding agents and humans changing the code.
+Atelier One is an AI painter on **NEAR testnet** who paints posters to order. Other agents can hire her over plain
+HTTP or MCP. Payment is an on-chain escrow that the buying agent sends from its own account. Work starts only after
+that escrow exists on-chain, and the buyer proves it controls the paying account with a **NEP-413** signed message.
 
-## Map
-| Path | What it is |
+Everything here is testnet. Nothing touches mainnet funds.
+
+| | |
 |---|---|
-| `contract/src/lib.rs` | Rust policy + NFT contract (near-sdk 5.30). Owner rules, agent-only methods, market, NEP-171/177/178/181/199, `atelier_one` NEP-297 events, unit tests at the bottom |
-| `app/api/agent/{generate,mint,list}` | The agent's three steps. Signed with the artist's **function-call keys** (`AGENT_FC_KEYS`). Steps are chained by an HMAC job token (`lib/job.ts`) |
-| `app/api/collector/buy` | Demo collector buy (demo studio only, ≤ 0.25 NEAR) |
-| `app/api/owner/kill` | Demo owner kill switch (function-call key). Auto-release after 60 s lives in `lib/killswitch.ts`, triggered from `/api/state` |
-| `app/api/state`, `app/api/ledger*` | Read models. The ledger is rebuilt from on-chain events, indexed by tx hash in Vercel Blob |
-| `lib/auth.ts` | NEP-413 owner-signature check for non-demo studios + per-IP rate limit |
-| `lib/near.ts` | RPC (failover), server-side signing, outcome/event parsing |
-| `lib/ai.ts`, `lib/art.ts`, `lib/ipfs.ts` | NEAR AI Cloud (when `NEAR_AI_API_KEY` is set) or the local SVG painter; Pinata pinning |
-| `lib/useStudio.ts`, `lib/view.ts`, `lib/lines.ts` | Client state machine for the loop; receipt lines and the studio P&L vs owner cut |
-| `components/dream/*` (`/`, the main design: Dream Island; host UI is `components/fox/FoxStudio.tsx` with `world="dream"`), `components/fox/*` (`/s/fox`, `/s/fox-classic`), `components/ReceiptSkin.tsx` (`/receipt`), `components/ClaySkin.tsx` (`/clay`), `components/scenes/*` (`/s/lake`, `/s/island`, `/s/robot`) | Skins over the same `useStudio()` hook. Keep them behaviorally identical. The fox scene is procedural three.js in `components/fox/FoxWorld.tsx` + `geo.ts`; its poster images live in `public/fox/`; the dream island's in `public/dream/` (re-render with `?3d=1&hq=1&clean=1&dusk=0.29` after changing the scene; debug params: `zoom=1`, `paint=1`, `perch=1`, `lantern=1`, `fox=curl|sniff`, `dusk=0..1`) |
+| Base URL | `https://atelier-one-near.vercel.app` |
+| Discovery | `GET /api/v1` |
+| MCP (Streamable HTTP, JSON-RPC 2.0) | `POST /api/mcp` |
+| Contract | `studio.atelier-one.testnet` |
+| Studio | `sina.atelier-one.testnet` |
+| Public P&L | `GET /api/pnl` · `/ledger` |
+| Example buyer | [`examples/agent-buyer.mjs`](examples/agent-buyer.mjs) |
 
-## Commands
+## Flow
+
+1. **Quote (free).** Send `POST /api/v1/quote` with `{"brief": "A poster for …"}`.
+   - The response holds `quoteToken` (valid 30 min), `briefHash`, and three `bids`.
+   - Each bid has a `styleId`, a `priceYocto`, and `humanArtist` (null for the two AI house styles).
+   - The response also holds `next`, the exact contract call to make.
+2. **Pay the escrow (on-chain, from your account).** Call `studio.atelier-one.testnet.commission({ studio_id, style_id, brief_hash })` and attach `priceYocto` as the deposit, with 30 Tgas.
+   - The return value is the `Commission`; keep its `id`.
+   - The contract rejects deposits below the style's minimum or the owner's price floor.
+   - It also rejects unauthorized styles and paused studios (kill switch).
+3. **Sign.** Sign a NEP-413 message with a key of the paying account.
+   - `message` = `Atelier One: commission <id>`
+   - `recipient` = `studio.atelier-one.testnet`
+   - `nonce` = 32 random bytes; no callbackUrl
+4. **Fulfil.** Send `POST /api/v1/commissions/<id>/fulfil` with:
+   ```json
+   { "quoteToken": "…", "auth": { "accountId": "you.testnet", "publicKey": "ed25519:…", "signature": "<base64>", "nonce": "<base64>" } }
+   ```
+   She paints with NEAR AI, pays her compute bill on-chain from her own budget, and mints the NEP-171 token to you. The same transaction splits your payment: the artist royalty if the style has a human artist, then the owner, then her budget.
+   - The call takes about 30 s.
+   - The response has the token id, PNG/SVG/PDF links, the split and the tx links.
+5. **Status.** `GET /api/v1/commissions/<id>` returns `Open`, `Delivered` (with `token_id`) or `Refunded`.
+
+**Refunds.**
+- If painting fails, the agent refunds the escrow in the same request.
+- If a commission is still open after 30 minutes, the buyer can call `refund_commission({commission_id})` on the contract.
+
+**Provenance.** Every token's `extra` metadata carries a provenance record: brief and prompt hashes, model, seed and time. It documents how the piece was made. It is **not** proof of originality or copyright.
+
+## MCP
+
+`POST /api/mcp` supports `initialize`, `tools/list` and `tools/call`. Tools:
+
+| tool | what it does |
+|---|---|
+| `list_styles` | studio, styles, prices, flow |
+| `get_quote` | step 1 |
+| `fulfil_commission` | step 4 (`commissionId`, `quoteToken`, `auth`) |
+| `commission_status` | step 5 |
+| `get_pnl` | the painter's P&L from contract state |
+
+The MCP server never holds your key. You pay the escrow (step 2) with your own NEAR tooling.
+
 ```bash
-npm install
-npm run dev                      # http://localhost:3000  (/ dream island, /s/fox, /receipt, /clay, /ledger)
-npx tsc --noEmit                 # typecheck
-npm run build                    # production build
-cd contract && cargo test        # 12 unit tests: floor, daily cap, kill switch, split math, agent-only, payout, treasury
-cd contract && cargo near build non-reproducible-wasm --no-abi
+curl -s https://atelier-one-near.vercel.app/api/mcp -H 'content-type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_quote","arguments":{"brief":"Poster for a jazz night, Friday 21:00"}}}'
 ```
 
-## Hard rules
-- **Never commit a private key.** Keys live only in Vercel env vars (`AGENT_FC_KEYS`, `COLLECTOR_KEY`, `DEMO_OWNER_FC_KEY`, `JOB_SECRET`, `PINATA_JWT`, `BLOB_READ_WRITE_TOKEN`, optional `NEAR_AI_API_KEY`) or in an ignored local `.env.local`.
-- The agent account must keep **only function-call keys** limited to `agent_charge_inference, agent_mint, agent_list`. Never add a full-access key to it, and never move a money flow off-contract.
-- Money rules (floor, daily cap, split, royalty, kill switch, agent-only) belong in the **contract**, with a unit test. The UI may only display them.
-- Inference fees go to `treasury_id`, never to the agent. Every sale path, including NEP-199 `nft_payout`, goes through `sale_split()`.
-- Changing contract state layout needs a `migrate` (see `ContractV1` + `migrate(treasury_id)`). Run `cargo test` before deploying.
-- `/api/agent/generate` must keep: demo studio open, other studios only with a valid NEP-413 owner signature, per-IP rate limit.
-- Keep metadata small: every byte of a token is paid from the studio budget as storage (media is a bare CID + contract `base_uri`).
-- The site is testnet-only. Don't point it at mainnet without the checklist in README → *Mainnet with tiny amounts*.
+## Run the example buyer
 
-## Verifying a change end to end
-1. `cargo test` and `npx tsc --noEmit` pass.
-2. Locally or on a preview: press Start studio on `/` (and START on `/receipt`, `/clay`). All steps go green with explorer links. The Studio session card / receipt shows Studio P&L and the owner's cut separately.
-3. Kill switch: engage it, press START, and the contract refuses (failed tx linked). It auto-releases within ~60 s.
-4. Check 390 px and 360 px mobile widths: START fits its circle, and the skin toggle sits at the page bottom, not over content.
+```bash
+BUYER_ACCOUNT_ID=you.testnet BUYER_PRIVATE_KEY=ed25519:… node examples/agent-buyer.mjs "Poster for a farmers market, Saturday 9:00" grid-ink
+```
 
-<!-- BEGIN:nextjs-agent-rules -->
+The key is read from your environment and used only locally, to sign the escrow transaction and the NEP-413 message.
 
-## This is NOT the Next.js you know
+## Limits
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+- Rate limits: 20 quotes and 6 fulfils per IP per 10 minutes.
+- The contract's daily AI spending cap, the owner's kill switch and the price floor always apply.

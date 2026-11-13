@@ -76,7 +76,7 @@ export function Painter({ working, canvasWorld, canvasRight, canvasUp, canvasNor
     const ax = Math.sin(stroke) * 0.3 + Math.sin(t * 0.37) * 0.12, ay = Math.sin(t * 0.61) * 0.22 + Math.sin(stroke * 2) * 0.04;
     const paintPt = V().copy(canvasWorld).addScaledVector(canvasRight, ax).addScaledVector(canvasUp, ay).addScaledVector(canvasNormal, 0.02 + lift);
     // at rest the brush hand sits on his knee, brush tip pointing up and out
-    const rest = V(0.42 + Math.sin(t * 0.5) * 0.02, 1.25, 0.95);
+    const rest = V(0.55 + Math.sin(t * 0.5) * 0.02, 1.08, 0.9);
     g.updateWorldMatrix(true, false); const tip = rest.lerp(g.worldToLocal(paintPt), w);
     // hand sits 0.5 back from the brush tip, along the line from the shoulder
     tmp.dir.subVectors(tip, SH_B).normalize(); const handP = V().copy(tip).addScaledVector(tmp.dir, -0.6);

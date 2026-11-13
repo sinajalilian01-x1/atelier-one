@@ -211,4 +211,4 @@
 .fx-zoom span{font:800 12px var(--f-nunito);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);min-width:52px;text-align:center}
 @keyframes fxFade{from{opacity:0}}
 .fx-clean .fx-zoom,.fx-og .fx-zoom{display:none}
-@media (max-width:820px){.fx-zoom{bottom:auto;top:calc(72svh - 58px);left:auto;right:12px;transform:none}}
+@media (max-width:820px){.fx-zoom{bottom:auto;top:84px;left:auto;right:12px;transform:none}}

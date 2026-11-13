@@ -1,0 +1,11 @@
+The fonts in this folder are used to set type on the commissioned posters (lib/poster.ts).
+They are licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org):
+
+- Anton (Copyright 2020 The Anton Project Authors)
+- Archivo Black (Copyright 2017 The Archivo Black Project Authors)
+- DM Serif Display (Copyright 2014 The DM Serif Display Project Authors)
+- Space Grotesk (Copyright 2020 The Space Grotesk Project Authors)
+- Space Mono (Copyright 2016 Google Inc.)
+
+All are distributed by Google Fonts (https://github.com/google/fonts). They are unmodified and
+are not sold on their own. The full OFL 1.1 text: https://openfontlicense.org/open-font-license-official-text/

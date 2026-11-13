@@ -1,147 +1,197 @@
 # Atelier One
 
-**A policy contract that lets any AI agent run a business safely. Art is the example.**
+**An AI painter on NEAR who runs her own poster studio. You commission a poster in chat. Three studio hands bid, you pay an on-chain escrow, and she paints it with NEAR AI. The poster is minted to you, and the same transaction pays the human artist, the owner and her own compute budget.**
 
-Atelier One is **a single agent run under an on-chain policy contract**. The owner writes the rules once: budget, daily AI spend cap, price floor, revenue split, resale royalty and a kill switch. The agent can only act through a function-call key that the contract checks against those rules on every call. The example business is an AI artist. He buys his own AI time out of the budget you fund, paints, mints each piece as a NEP-171 NFT, lists it at or above your floor, sells it, and splits the money with you in the same transaction. Every cost, sale and payout lands in a public ledger with explorer links.
+- **Live demo:** https://atelier-one-near.vercel.app (testnet). The public P&L is at [/ledger](https://atelier-one-near.vercel.app/ledger), and the agent API is documented in [AGENTS.md](AGENTS.md).
+- **Network:** NEAR **testnet** only. Every number below comes from a real testnet transaction. Nothing runs on mainnet, and no real funds are used.
+- **Tracks:** Agent Economy · Autonomous Business · NFTs That Do Something
+- **Built at NEAR HACKATHON.** Disclosure per Q-015: Sina Jalilian has one other entry, **Muse Swarm**, a separate and independent project. Muse Swarm is a multi-agent swarm of AI robots working together. Atelier One is a single agent with one business, bound by an on-chain policy contract.
 
-Swap the painter for any other agent (a writer, a data labeler, a trading bot with a different contract method) and the same policy pattern still applies: **the agent has a job, the contract has the rules, the owner has the off switch.**
+![The farm island: the painter in her garden, the cabin, barn, sheep in the pasture and the live studio cards](docs/farm-idle.jpg)
 
-- **Live demo:** https://atelier-one-near.vercel.app (Dream Island, the main design; the Autumn Fox look is at [/s/fox](https://atelier-one-near.vercel.app/s/fox)) · https://atelier-one-near.vercel.app/ledger (public ledger) · other looks of the same loop: [/receipt](https://atelier-one-near.vercel.app/receipt), [/clay](https://atelier-one-near.vercel.app/clay)
-- **Network:** NEAR **testnet**. Everything below is a real on-chain transaction.
-- **Tracks:** Autonomous Business · Agent Economy · NFTs That Do Something
-- **Built at NEAR HACKATHON.** Sina's other entry, **Muse Swarm**, is a separate project: **a multi-agent swarm** of four AI robots working together in a low-poly 3D room. Atelier One is the opposite design. It has one agent, one owner and one business, and the safety lives in a contract, not in agent-to-agent coordination.
+## The problem
 
-| On-chain piece | Account |
-|---|---|
-| Studio / policy contract (NEP-171 + NEP-177 + NEP-178/181 + NEP-199, owner rules, market, split) | [`studio.atelier-one.testnet`](https://testnet.near.rocks/account/studio.atelier-one.testnet) |
-| The artist (agent). It holds **only function-call keys** for `agent_charge_inference`, `agent_mint`, `agent_list`, `agent_deliver` and `refund_commission`, and has no full-access key | [`painter.atelier-one.testnet`](https://testnet.near.rocks/account/painter.atelier-one.testnet) |
-| Platform treasury. **Receives every inference fee** and pays the inference provider | [`treasury.atelier-one.testnet`](https://testnet.near.rocks/account/treasury.atelier-one.testnet) |
-| Demo owner (the studio's owner). The server holds only a function-call key for `set_kill_switch` / `update_rules` | [`sina.atelier-one.testnet`](https://testnet.near.rocks/account/sina.atelier-one.testnet) |
-| Demo collector (buys for judges who don't have a wallet) | [`collector.atelier-one.testnet`](https://testnet.near.rocks/account/collector.atelier-one.testnet) |
+AI agents can now do paid creative work, but three things are hard to trust:
+- who pays for the compute;
+- whether the human artist whose style is used gets paid;
+- whether the agent can be stopped or overspend.
 
-![Atelier One: a bearded low-poly painter at his easel on a floating autumn island, with the live studio cards](docs/dream-desktop.jpg)
-
-![The whole island hanging in the sky, with its waterfall pouring into the clouds](docs/dream-island.jpg)
+Atelier One makes each of these a contract rule:
+- The buyer's money sits in **escrow** until delivery.
+- The **royalty split** to a real, consenting artist is paid on-chain at delivery. Only authorized styles can be commissioned.
+- The agent pays **her own compute** from a budget, under the owner's daily cap and kill switch.
+- Her **P&L is public** and read from contract state.
 
 ## Try it in 2 minutes (do X → see Y)
 
-1. **Open https://atelier-one-near.vercel.app.** You see a floating autumn island in the sky. A low-poly painter with long silver hair, a long beard, a beret and a scarf sits on a stump at his easel; his fox wanders around (it sniffs the easel and naps by the gramophone), birds glide past, a stream runs from a spring past the log cabin and pours off the edge as a waterfall. The sky drifts slowly from daylight to dusk and back. The easel shows the studio's **newest real NFT**. Four glass cards sit over the scene:
-   - **Painting** (bottom left): the current or last artwork, a progress bar and six steps: *Pay AI · Paint · Mint · List · Sell · Split*.
-   - **Owner rules** (top right): price floor, AI cap per day, split 70/30, AI spent today and the kill switch.
-   - **Autumn Notes** (right): the studio radio. Press ▶ to hear it.
-   - **Studio session** (bottom right): the last real run, with *Owner earned*, the 70/30 payout, AI + mint costs, the studio P&L and a link to the sale transaction.
-2. **Press the orange *Start studio* button** (top right; on a phone it is under the headline). It changes to **Working… Ns** and the music starts.
-3. **Watch *Pay AI* and *Paint*.** The agent pays for its inference out of the studio budget (`agent_charge_inference`, fee → treasury), then the painter's brush moves across the canvas and the artwork appears on the 3D easel stroke by stroke and in the Painting card. When the painting is finished a robin lands on the easel. The artwork is pinned to IPFS. Both chips turn green and link to the transaction. The Studio session card prints **AI inference −0.002**.
-4. **Watch *Mint*.** `agent_mint` mints the token to the owner as NEP-171 with NEP-177 metadata (IPFS media + sha256 `media_hash`). Storage is paid from the budget, so the card prints **Mint "…" −0.00x**.
-5. **Watch *List*.** `agent_list` lists the token at the artist's price. The contract rejects any price under the owner's floor, and the card prints **List #N @ price · floor … · rule kept**.
-6. **Watch *Sell*.** A card asks who buys:
-   - No wallet: the **Demo collector** buys after 3 s. `collector.atelier-one.testnet` calls `buy` and attaches the price in testnet NEAR.
-   - Your own wallet: click **Own a studio**, connect a testnet wallet (MyNearWallet, Meteor or HERE), press Start, then pick **Buy with my wallet** (you get 15 s).
-7. **Watch *Split*.** The same `buy` transaction pays the owner 70% and puts 30% back into the artist's AI budget. The Studio session card flips to **this run** and shows **Owner earned**, *Owner (70%)*, *Studio AI budget (30%)*, *AI bill + mint storage* and **Studio P&L** (the studio's 30% minus its costs, so you can see whether the agent pays for itself). The sold painting floats up from the easel as a glowing paper lantern. The button now reads **Paint another**. A full loop takes about 60 s.
-8. **Click any green chip or *Sale + split in one transaction ↗*.** It opens the transaction on NEAR Rocks, the explorer that explorer.testnet.near.org recommends. Each hash works on NearBlocks too.
-9. **Click *Ledger* in the top bar to open `/ledger`.** It lists every line from every run, rebuilt from the contract's `atelier_one` NEP-297 events.
-10. **Pull the kill switch.** Flip the switch in *Owner rules*. The demo owner signs `set_kill_switch(true)` on-chain and the card shows **ENGAGED**. Press Start: the artist tries to pay for compute and **the contract refuses** (the *Pay AI* chip turns red with a link to the failed transaction). Flip it back to release it. The demo studio is shared by every visitor, so **an engaged demo kill switch releases itself after 60 s** (the card shows the countdown). Kill switches on your own studio never auto-release.
-11. **Open your own studio.** Click **Own a studio**, connect a wallet, fill in name, style, floor, AI cap per day, owner split %, resale royalty % and starting budget (minimum 0.1 NEAR), then **Open studio & fund**. Press **Run my studio** and Start. The first time, your wallet asks you to **sign a message (NEP-413)**: "Atelier One: run studio <you> until <time>". The server runs the agent for a non-demo studio only with that owner signature (a full-access key of the owner account, valid 12 h). Sales then pay your wallet.
-12. **Zoom out.** Press the 🔍− button under the scene (or scroll the mouse wheel over the scene at the top of the page, or pinch on a phone) and the camera eases out to the whole island hanging over a sea of clouds; 🔍+ brings you back. The wheel only zooms while the page is at the top and hands scrolling back to the page at either end, so it never traps you.
-13. **Scroll down** for *How it works* (four steps), live totals read from the contract (works minted, sold, NEAR paid to the owner, AI budget left) and the gallery of minted works.
-14. **Other looks.** The footer links the same loop in other designs: `/s/fox` (Autumn Fox, the previous main design; also at `/s/fox-classic`), `/receipt` (thermal receipt), `/clay` (clay desk) and the 3D scenes `/s/lake`, `/s/island`, `/s/robot`.
+1. **Open https://atelier-one-near.vercel.app.** You see a small low-poly farm on a floating island: a cabin, a red barn, crop rows, a scarecrow, sheep behind a fence, chickens by the coop, and a stream that pours off the edge as a waterfall.
+   - The painter (she/her) strolls, waters and tends her flower garden, and looks at the view. Her dog follows her.
+   - Time runs from morning through day and a pink sunset to night (stars, moon, lamps, fireflies, animals asleep), about 4 minutes per day. The ☀/☾ toggle under the scene jumps to day or night.
+2. **Press *Commission a poster*** (top right). A chat panel opens. Type a brief, or tap an idea chip (or use the mic, where the browser supports Web Speech). Press **Get three quotes**.
+   - **You see:** in ~2–5 s, poster copy written by NEAR AI (`Qwen3.6-35B-A3B`) and **three bids** with prices and pitches:
+     - *Pip · Paper Fox* (AI house style)
+     - *Ora · Grid & Ink* (AI house style)
+     - *Sina Jalilian · Neon Mark*: marked **real artist**, with "20% of the price goes on-chain to sina.atelier-one.testnet"
+3. **Pick a bid.** Under it you see **live NEAR Intents 1Click quotes** for paying the same amount in USDC (Base, Solana), ETH, SOL, USDT and BTC. These are mainnet *dry* quotes, read-only: nothing is sent, and the demo settles in testnet NEAR.
+4. **Press *Pay … NEAR · demo patron*.** A funded testnet account (`collector.atelier-one.testnet`) pays for you, or you can connect a testnet wallet and pay yourself. Optionally enter your testnet account under *Deliver to* to receive the token. You then see four steps with a timer:
+   - **Escrow paid:** `commission(studio, style, brief_hash)` holds your NEAR in the contract.
+   - **Painting:** the camera walks in. She goes to her easel and paints, and the 3D canvas fills with your poster. On the server, NEAR AI `FLUX.2-klein-4B` paints the image. The type is set into a 1200×1600 poster (SVG → PNG), pinned to IPFS, and she pays the compute bill on-chain from her own budget (`agent_charge_inference`).
+   - **Mint to buyer + split:** `agent_deliver` mints NEP-171 token #N to the buyer and, in the same transaction, pays the artist royalty, the owner share and her budget share.
+   - **Delivered in N s**, with links to every transaction on NEAR Rocks.
+5. **Download** the poster as **PNG 1800×2400**, **SVG** or **PDF**. The token's metadata holds a provenance record: brief and prompt hashes, model, seed and time. It records how the piece was made; **it is not proof of originality or copyright**.
+6. **Open [/ledger](https://atelier-one-near.vercel.app/ledger).** The P&L board is read live from contract state, in NEAR and USD:
+   - revenue
+   - what went to human artists
+   - the owner's share
+   - what she kept
+   - the compute and mint storage she paid
+   - her net and her budget
 
-<img src="docs/dream-mobile.jpg" alt="Atelier One on a phone" width="300" />
+   Below the board, every line links to its transaction.
+7. **Hire her from another agent.** `GET /api/v1` describes the flow, and `POST /api/mcp` is an MCP server. [AGENTS.md](AGENTS.md) has the steps, and [`examples/agent-buyer.mjs`](examples/agent-buyer.mjs) is a working buyer:
+   - It quotes over HTTP.
+   - It pays the escrow from its own testnet account.
+   - It signs a **NEP-413** message (`Atelier One: commission <id>`) to prove it is the payer.
+   - It calls `/fulfil` and gets the token and the files back.
+8. **Owner controls.** *Owner rules* (top right) shows the price floor, the daily AI cap, the 70/30 split and the **kill switch**.
+   - Flip the switch: the contract refuses new commissions and every agent call.
+   - The shared demo switch releases itself after 60 s.
+   - *Watch a studio run* runs the older autonomous loop: paint → mint → list → sell to the demo collector → split.
 
-### Design and loading
-- The scene is **procedural three.js** (react-three-fiber): no model or texture files, everything is vertex-coloured, flat-shaded and instanced (trees, pines, stones, leaves, grass, clouds), so the island is a few dozen draw calls. The characters are built from primitives: the painter's brush arm uses two-bone IK so the brush tip actually follows strokes on the canvas.
-- **Water is all shader:** the stream, the spring pond and the waterfalls use one small GLSL material (scrolling value-noise streaks, foam at the banks, ripples) and the spray, curtain mist and cloud plumes are one GPU particle system. The day → dusk cycle drives the sky shader, the lights, fog and fireflies from one controller.
-- **The page paints a static poster first** (a compressed WebP of the same scene, about 29 KB on phones), then loads the 3D when the browser is idle and cross-fades to it.
-- Quality steps down on its own: phones and low-end devices get a **lite** scene (fewer instances, no shadows, no bloom, DPR ≤ 1.25); a frame-time watchdog drops full → lite below ~28 fps and lite → poster below ~12 fps; machines without a GPU (software WebGL) or with *reduced motion* keep the poster with CSS fireflies. Add `?3d=1` to force the 3D, `?lite=1` for the lite scene.
-- **Music:** "Autumn Notes" is generated live in the browser with WebAudio (`lib/lofi.ts`: synthesised chords, melody, drums and vinyl crackle). There are no samples or audio files, so there is no third-party license. It only starts after a click.
-- Artwork images go through `/api/media/<cid>`, a same-origin, CDN-cached copy of the IPFS file (the on-chain metadata still points at IPFS).
+![She paints the commission at her easel](docs/farm-painting.jpg)
+![A delivered commission with downloads, the split and the provenance note](docs/farm-commission-delivered.jpg)
 
-## The business model (where every yoctoNEAR goes)
+## Measured, not claimed
 
-- **Owner (you):** funds a small AI budget and earns the owner split (default **70%**) of every primary sale, straight to the wallet. You can withdraw unspent budget at any time (`withdraw_budget`).
-- **Studio (the agent's budget, held by the contract):** keeps the studio split (default **30%**) and pays for inference and mint storage out of it. **STUDIO P&L** on the receipt = studio share − AI − mint storage. A positive number means the agent pays for itself.
-- **Inference fees → treasury.** `agent_charge_inference` moves the fee from the studio budget to `treasury_id` (`treasury.atelier-one.testnet`, which the admin can change with `set_treasury`). The treasury is the platform account that pays the inference provider (NEAR AI Cloud is billed in USD off-chain). Fees **never** go to the agent account. The agent pays only its own gas. In the earlier v1 contract, fees went to the agent account. The small fees from those v1 runs stay there as its gas float; the agent has only function-call keys, so it cannot move them anywhere else.
-- **Royalties, on every path:**
-  - *In-contract resale* (`list_for_resale` + `buy`): the seller gets the price minus the royalty (default **10%**). The royalty is split owner/studio with the same 70/30.
-  - *External marketplaces* (NEP-199 `nft_payout` / `nft_transfer_payout`) use the **same split function** as `buy`. The owner's share goes to the owner's wallet. The studio's share is paid **to the contract itself**, and `nft_transfer_payout` credits it to the studio budget. A primary sale on an external marketplace is split 70/30 too. No sale path routes money around the studio budget. (Trust note: per NEP-199, the marketplace pays the payout after `nft_transfer_payout` returns, so the budget is credited on that promise, as on every NEP-199 contract.)
-- **Guardrails enforced by the contract, not the UI:** price floor, daily AI spend cap, budget balance, an agent that can only use a function-call key, and the owner's kill switch. All are covered by unit tests (see *Tests*).
-- **Platform fee (roadmap, not implemented yet):** a small per-sale cut for whoever hosts the agent.
+All runs were on production (https://atelier-one-near.vercel.app), NEAR testnet, on 13 Nov 2026:
 
-## What's real and what's a fallback
+| Flow | Measured |
+|---|---|
+| Chat UI: brief → three bids | 3.5 s |
+| Chat UI: brief → delivered token (escrow, NEAR AI paint, compute charge, mint + split) | **54.6 s** (UI timer from pay to delivered: 43 s), commission → token #27 |
+| Agent API (`examples/agent-buyer.mjs`): quote → escrow → NEP-413 → fulfil → token | **42.5 s**, commission #4 → token #29 |
+| NEAR AI image (FLUX.2-klein-4B, 768×1024) | ~3–5 s; cost $0.012 per image, converted to NEAR and charged on-chain |
+
+Example transactions:
+- commission #2 escrow: [`5TwDn2Lg…`](https://testnet.near.rocks/tx/5TwDn2Lg2vK2enS9HsrTEZbuxx8n2jtFJqs9EsYd3P4y)
+- compute charge: [`9GtZQNF1…`](https://testnet.near.rocks/tx/9GtZQNF1yHocFvbbVwRpzejxjEJuRjXsoxGHvWs83y27)
+- mint + split: [`5imwg9Aq…`](https://testnet.near.rocks/tx/5imwg9AqoQ722kfB6SBsWwgzWLBbN16hGBhvkwyVF7dw)
+
+**What we do *not* claim:**
+- **Cross-chain payment is not live.** The Intents quotes are real mainnet 1Click quotes, requested with `dry: true`, and nothing executes. The escrow is paid in testnet NEAR.
+- **Delivery times vary.** They depend on NEAR AI latency and testnet block times.
+
+## What is real and what is a fallback
 
 | Part | Status |
 |---|---|
-| Contract, accounts, inference charge → treasury, mint, listing, buy, 70/30 split, kill switch, NEP-199 payout | **Real** (NEAR testnet) |
-| IPFS pinning of every artwork (Pinata) | **Real** |
-| Public ledger | **Real**: built from on-chain event logs. Each tx hash is indexed in Vercel Blob. Wallet transactions are re-fetched from RPC and verified before they are recorded |
-| Art generation | **NEAR AI Cloud is wired in** (`https://cloud-api.near.ai/v1`, OpenAI-compatible): a chat model (`Qwen/Qwen3.6-35B-A3B-FP8` by default) writes the concept and price, and `black-forest-labs/FLUX.2-klein-4B` paints the image. Its USD cost is converted to NEAR and charged on-chain. **It turns on only when `NEAR_AI_API_KEY` is set.** Without a key, the deployed demo uses the **local generative painter** (deterministic SVG, labeled "local painter (fallback)" in the Loop card and on the receipt). That fallback charges a flat 0.002 NEAR compute fee to the budget. |
+| Contract: escrow, delivery, artist royalty split, owner/studio split, refunds, styles registry, budget, daily AI cap, kill switch, NEP-171/177/199 | **Real** (testnet) |
+| Poster copy and bids | **NEAR AI Cloud** `Qwen/Qwen3.6-35B-A3B-FP8`. Falls back to a rules-based quote if NEAR AI is unreachable (the model field then says so) |
+| Poster image | **NEAR AI Cloud** `black-forest-labs/FLUX.2-klein-4B`. Falls back to a local generative painter labeled "fallback: NEAR AI unavailable"; it is never presented as NEAR AI |
+| Pay with other tokens | NEAR Intents 1Click **dry quotes only** (read-only) |
+| IPFS (Pinata), PNG/SVG/PDF print files | **Real** |
+| P&L board | **Real**: totals from `get_studio` / `get_styles` / `get_commissions`; line items from `atelier_one` NEP-297 events |
+| The human artist | `sina-neon` is Sina Jalilian's own style, registered with `set_style` as authorized, with a license note and 20% royalty to `sina.atelier-one.testnet`. In this demo the same account is also the studio owner, so it receives both the royalty and the owner share; the contract keeps them as separate lines |
 
 ## How it works
 
 ```
-Browser (Next.js 16, Dream Island 3D scene + Autumn Fox/Receipt/Clay skins, NEAR Wallet Selector)
-  │ START
-  ├─ POST /api/agent/generate ─► NEAR AI Cloud (or local painter) ─► Pinata IPFS
-  │                              └─► artist FC key: agent_charge_inference(studio, cost)   [tx 1]
-  ├─ POST /api/agent/mint     ─► artist FC key: agent_mint(studio, NEP-177 metadata)        [tx 2]
-  ├─ POST /api/agent/list     ─► artist FC key: agent_list(token, price ≥ floor)            [tx 3]
-  ├─ POST /api/collector/buy  ─► collector: buy(token) + price      OR  your wallet: buy()  [tx 4]
-  │                              └─► contract pays owner 70% + refills studio budget 30% (same tx)
-  └─ GET  /api/ledger         ─► lines rebuilt from atelier_one events
+Browser (Next.js 16, three.js farm scene, chat commission, NEAR Wallet Selector)
+  ├─ POST /api/commission/quote   ─► NEAR AI (Qwen) → poster copy + 3 bids (HMAC-signed quote token)
+  ├─ POST /api/commission/pay     ─► demo patron: commission(studio, style, brief_hash) + deposit   [tx 1]  (or your wallet)
+  ├─ POST /api/commission/paint   ─► NEAR AI (FLUX) → poster SVG/PNG → IPFS
+  │                                  └─► agent FC key: agent_charge_inference(cost)                  [tx 2]
+  │                                  (on failure: agent refund_commission → escrow back)
+  ├─ POST /api/commission/deliver ─► agent FC key: agent_deliver(id, metadata)                       [tx 3]
+  │                                  └─► mint to buyer + artist royalty + owner + studio budget (one tx)
+  ├─ GET  /api/intents/quote      ─► NEAR Intents 1Click /quote (dry: true)
+  ├─ GET  /api/pnl, /ledger       ─► contract state + events
+  └─ /api/v1/*, /api/mcp          ─► the same flow for other agents (NEP-413 buyer auth)
 ```
 
-`generate → mint → list` are linked by an HMAC-signed job token. The browser can't swap the artwork, the title or the price between steps.
+### Contract (`contract/src/lib.rs`, near-sdk 5)
+- **Commissions:**
+  - `commission(studio_id, style_id, brief_hash)` is payable. It rejects deposits below the style minimum or the owner's floor, unauthorized styles, and paused studios.
+  - `agent_deliver(commission_id, metadata)`
+  - `refund_commission(commission_id)`: the agent can call it anytime; the buyer can call it after 30 min.
+  - Views: `get_commission`, `get_commissions`
+- **Styles:**
+  - `set_style` (admin) takes artist, `artist_bps` ≤ 50%, min price, `authorized` and a license note.
+  - View: `get_styles`
+- **Owner:** `open_studio`, `fund_studio`, `update_rules`, `set_kill_switch`, `withdraw_budget`
+- **Agent only:** `agent_charge_inference`, `agent_mint`, `agent_list`, `agent_deliver`, `refund_commission`
+  - The agent account `painter.atelier-one.testnet` has **only function-call keys** for these methods.
+- **Market:** `buy`, `list_for_resale`, `delist`, `nft_payout`, `nft_transfer_payout`, plus the NEP-171/177/178/181 standard methods
+- **Tests:** `cd contract && cargo test`. 18 unit tests:
+  - floor, daily cap, kill switch
+  - split math (sales and commissions)
+  - escrow / deliver / refund rules
+  - artist royalty
+  - agent-only methods
+  - NEP-199 payout routing
+- **Upgraded in place on testnet** (v2 → v3 via `migrate`), keeping all earlier tokens.
 
-### API guardrails
-- `/api/agent/generate` runs the **demo studio** for anyone. **Any other studio needs a NEP-413 signature from its owner.** The server checks the ed25519 signature over the NEP-413 payload hash, checks that the message names that studio and hasn't expired, and checks on-chain that the key is a **full-access key** of the owner account.
-- Per-IP rate limits: 6 runs / 10 min on generate, 6 / 10 min on demo buys, 10 / 10 min on the demo kill switch. These are in-memory per server instance, so they are best effort. The hard limit is the contract's daily AI cap.
-- The demo collector buys only fresh primary listings from the demo studio, up to 0.25 NEAR.
+| On-chain piece | Account |
+|---|---|
+| Studio / policy contract | [`studio.atelier-one.testnet`](https://testnet.near.rocks/account/studio.atelier-one.testnet) |
+| The painter (agent), function-call keys only | [`painter.atelier-one.testnet`](https://testnet.near.rocks/account/painter.atelier-one.testnet) |
+| Studio owner and the human artist of *Neon Mark* | [`sina.atelier-one.testnet`](https://testnet.near.rocks/account/sina.atelier-one.testnet) |
+| Treasury (receives compute fees, pays the inference provider) | [`treasury.atelier-one.testnet`](https://testnet.near.rocks/account/treasury.atelier-one.testnet) |
+| Demo patron / collector | [`collector.atelier-one.testnet`](https://testnet.near.rocks/account/collector.atelier-one.testnet) |
 
-### Contract API (`contract/src/lib.rs`)
-- Owner: `open_studio(name, style, floor, split_owner_bps, royalty_bps, daily_ai_cap)` (payable: the deposit becomes the budget), `fund_studio(studio_id)`, `update_rules(…)`, `set_kill_switch(engaged)`, `withdraw_budget(amount)`
-- Admin: `set_agent`, `set_treasury`. Upgrade: `migrate(treasury_id)` (private, v1 → v2 state)
-- Agent only: `agent_charge_inference`, `agent_mint`, `agent_list`. All of them fail while the kill switch is engaged
-- Market: `buy(token_id)` (payable), `list_for_resale`, `delist`, `nft_payout`, `nft_transfer_payout`
-- Standards: `nft_transfer`, `nft_transfer_call`, `nft_token`, `nft_tokens`, `nft_tokens_for_owner`, `nft_total_supply`, `nft_metadata`, `nft_approve`, `nft_revoke`, `nft_is_approved`
-- Views: `get_studio`, `get_studios`, `get_listing`, `get_listings`, `get_config` (includes `treasury_id`), `get_token_studio`
-
-### Tests
-`cd contract && cargo test` runs 12 unit tests, all passing:
-- price floor: rejects a listing under the floor, accepts one at the floor
-- daily AI cap: rejects a charge over the cap, resets the next UTC day
-- kill switch: blocks charge, mint and list; works again after release
-- split math: primary 70/30, resale royalty split, and all shares sum to the price for odd amounts
-- `buy` refills the budget
-- agent-only: charge, mint and list each panic for non-agent callers
-- inference fee goes to the treasury
-- mint storage is paid from the budget
-- `nft_payout` routes the studio share through the budget, for both a primary sale and a resale
+### The scene
+- The scene is procedural three.js (react-three-fiber). It uses no model or texture files: everything is flat-shaded, vertex-coloured and instanced.
+- **Movement:**
+  - The painter walks on a path graph (Dijkstra) with a distance-driven gait, planted feet and two-bone IK for legs and arms.
+  - When she paints, the brush follows strokes on the canvas.
+  - The dog, chickens and sheep have simple idle, walk and sleep behaviours.
+- **Day/night:** one controller drives the sky shader, sun and moon light, shadows, fog, lamps and fireflies.
+- **Loading:**
+  - The page paints a static poster first, then loads 3D when the browser is idle.
+  - Phones get a lite scene.
+  - A frame-time watchdog steps down quality, and software-GL machines keep the poster.
+  - Add `?3d=1` to force 3D. `?night=1`, `?time=0..1` and `?her=paint|garden` pin a state for screenshots.
+- **Music:** "Autumn Notes" is synthesised live with WebAudio, so it uses no audio files. It starts only on click.
+- **Other looks:**
+  - The earlier main design (Autumn Fox) is at [/s/fox](https://atelier-one-near.vercel.app/s/fox).
+  - Older skins of the autonomous loop are at `/receipt` and `/clay`.
 
 ## Run it yourself
 
 ```bash
 # contract
-cd contract && cargo near build non-reproducible-wasm --no-abi
+cd contract && cargo near build non-reproducible-wasm --no-abi && cargo test
 near contract deploy <contract>.testnet use-file target/near/atelier_one_studio.wasm \
   with-init-call new json-args '{"admin_id":"<you>.testnet","agent_id":"<agent>.testnet","treasury_id":"<treasury>.testnet"}' \
   prepaid-gas '100 Tgas' attached-deposit '0 NEAR' network-config testnet sign-with-keychain send
-# give the agent function-call keys only
-near account add-key <agent>.testnet grant-function-call-access --allowance unlimited \
-  --contract-account-id <contract>.testnet --function-names 'agent_charge_inference, agent_mint, agent_list' \
-  autogenerate-new-keypair save-to-keychain network-config testnet sign-with-keychain send
-
+# styles (admin)
+near contract call-function as-transaction <contract>.testnet set_style json-args \
+  '{"id":"paper-fox","name":"Paper Fox","artist_id":null,"artist_bps":0,"min_price":"30000000000000000000000","authorized":true,"license":"house style"}' \
+  prepaid-gas '30 Tgas' attached-deposit '0 NEAR' sign-as <you>.testnet network-config testnet sign-with-keychain send
 # web app
-cp .env.example .env.local   # fill in the keys (never commit them)
-npm install && npm run dev   # http://localhost:3000 (dream island), /s/fox, /receipt, /clay, /ledger
+cp .env.example .env.local   # NEAR_AI_API_KEY, AGENT_FC_KEYS, COLLECTOR_KEY, PINATA_JWT, JOB_SECRET … (never commit them)
+npm install && npm run dev   # http://localhost:3000
 ```
 
-Set `NEXT_PUBLIC_CONTRACT_ID`, `NEXT_PUBLIC_AGENT_ID`, `NEXT_PUBLIC_DEMO_STUDIO_ID` and `NEXT_PUBLIC_COLLECTOR_ID` if you use your own accounts.
-
 ## Security notes
-- No private key is in this repo. Keys live only in Vercel environment variables.
-- The agent account has **no full-access key**. Its keys can call only the three `agent_*` methods on the studio contract, and they can't attach deposits or transfer NEAR. Money moves only through contract rules.
-- The server-side demo owner key is a function-call key for `set_kill_switch` / `update_rules` only.
-- The demo collector buys only fresh primary listings from the demo studio, up to 0.25 NEAR. Non-demo studios run only with an owner NEP-413 signature. Per-IP rate limits are best effort; the contract's daily AI cap limits how much budget the agent can burn even if the endpoints are spammed.
+- **No private keys are in this repo.** Keys live only in Vercel environment variables. The full git history was scanned with gitleaks before the repo went public.
+- **The agent account has no full-access key.** Its function-call keys can't attach deposits, and money moves only through contract rules.
+- **Escrow refunds:**
+  - A failed paint is refunded automatically.
+  - Buyers can self-refund after 30 min.
+- **Demo limits:**
+  - The demo patron pays only for quoted commissions and refuses to pay if its balance is low.
+  - Per-IP rate limits apply to quotes (20 / 10 min), payments (5 / 10 min) and agent fulfils (6 / 10 min).
+- **Agent API fulfils need a NEP-413 signature.** It must come from a key of the account that paid the escrow.
+
+## Built with
+- **Frameworks:** Next.js 16, React 19, three.js, @react-three/fiber
+- **NEAR libraries:** near-api-js, NEAR Wallet Selector, near-sdk-rs 5
+- **Services:** NEAR AI Cloud, NEAR Intents 1Click API, Pinata
+- **Rendering:** @resvg/resvg-js, pdf-lib
+- **Fonts:** Anton, Archivo Black, DM Serif Display, Space Grotesk, Space Mono, all under the SIL OFL (see `assets/fonts/OFL-NOTICE.txt`)
+- **Assistance:** the code was written with AI assistance.
+- **Timeline:** all code is from the hackathon window (first commit 13 Nov 2026).
 
 ## Mainnet with tiny amounts (assessment, not deployed)
 Feasible, with a few changes and about **4–6 NEAR** of setup money. Nothing is on mainnet yet.
@@ -162,6 +212,7 @@ Feasible, with a few changes and about **4–6 NEAR** of setup money. Nothing is
   - Lock the contract upgrade path (delete or multisig the contract's full-access key) after deploy.
   - A short audit of the `buy` / `nft_transfer_payout` paths.
   - Treat NFTs sold for real NEAR as a real sale (terms and pricing).
+
 
 
 MIT licensed.

@@ -257,6 +257,8 @@ a.lv-row:hover{background:#F3F8E6}
 }
 
 @media (max-width:400px){
+  .cl-nav{padding:0 8px 0 12px}.cl-logo{font-size:19px;white-space:nowrap}.cl-logo .blob{width:30px;height:30px}
+  .cl-nav .pill{padding:9px 13px;font-size:12px;white-space:nowrap}
   .rc h1{font-size:33px}
   .rc-start{width:106px;height:106px;font-size:15px;padding:0 10px;box-shadow:0 6px 0 #0E0E0E}
   .rc-start small{font-size:8.5px;max-width:76px}

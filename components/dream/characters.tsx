@@ -75,9 +75,9 @@ export function Painter({ working, canvasWorld, canvasRight, canvasUp, canvasNor
     const stroke = t * 1.9; const lift = Math.max(0, Math.sin(stroke + 1.6)) * 0.14;
     const ax = Math.sin(stroke) * 0.3 + Math.sin(t * 0.37) * 0.12, ay = Math.sin(t * 0.61) * 0.22 + Math.sin(stroke * 2) * 0.04;
     const paintPt = V().copy(canvasWorld).addScaledVector(canvasRight, ax).addScaledVector(canvasUp, ay).addScaledVector(canvasNormal, 0.02 + lift);
-    const restPt = V().copy(canvasWorld).addScaledVector(canvasRight, -0.55 + Math.sin(t * 0.5) * 0.04).addScaledVector(canvasUp, -0.5).addScaledVector(canvasNormal, 0.55);
-    const tipW = restPt.lerp(paintPt, w);
-    g.updateWorldMatrix(true, false); const tip = g.worldToLocal(tipW.clone());
+    // at rest the brush hand sits on his knee, brush tip pointing up and out
+    const rest = V(0.42 + Math.sin(t * 0.5) * 0.02, 1.25, 0.95);
+    g.updateWorldMatrix(true, false); const tip = rest.lerp(g.worldToLocal(paintPt), w);
     // hand sits 0.5 back from the brush tip, along the line from the shoulder
     tmp.dir.subVectors(tip, SH_B).normalize(); const handP = V().copy(tip).addScaledVector(tmp.dir, -0.6);
     const el = elbowOf(SH_B, handP, 0.42, 0.4, V(0.75, 0.75, -0.6));
@@ -315,14 +315,14 @@ export function Lantern({ art, fireKey, from, lite, demo }: { art: ArtSource | n
   const paper = useMemo(() => new THREE.MeshBasicMaterial({ color: new THREE.Color("#FFD9A0").multiplyScalar(1.5), toneMapped: false, side: THREE.DoubleSide, transparent: true }), []);
   const artM = useMemo(() => new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.05, 1.0, 0.9), toneMapped: false, transparent: true }), [tex]);
   const gm = useMemo(() => new THREE.SpriteMaterial({ map: glowTexture(), color: "#FFB45A", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 }), []);
-  const DUR = 16;
+  const DUR = 22;
   useFrame(({ clock }) => {
     clockRef.current = clock.elapsedTime; const o = g.current; if (!o) return;
     let k = start == null ? -1 : (clock.elapsedTime - start) / DUR;
-    if (demo) k = 0.05 + ((clock.elapsedTime % DUR) / DUR) * 0.12;
+    if (demo) k = 0.12 + ((clock.elapsedTime % DUR) / DUR) * 0.12;
     o.visible = k >= 0 && k < 1; if (!o.visible) { if (light.current) light.current.intensity = 0; return; }
-    const e = Math.pow(k, 1.35); const t = clock.elapsedTime;
-    o.position.set(from.x + Math.sin(k * 7) * 0.5 * k + k * 1.5, from.y + 0.25 + e * 15, from.z + Math.cos(k * 5) * 0.4 * k - k * 2);
+    const e = Math.pow(k, 2.2); const t = clock.elapsedTime; // lingers by the easel, then drifts up into the sky
+    o.position.set(from.x + Math.sin(k * 7) * 0.4 * k + k * 2.4, from.y + 0.35 + Math.min(1, k * 8) * 0.25 + e * 15, from.z + Math.cos(k * 5) * 0.3 * k + k * 1.2);
     o.rotation.y = t * 0.35; o.rotation.z = Math.sin(t * 1.3) * 0.08;
     const fade = Math.min(1, k * 8) * (1 - Math.max(0, (k - 0.75) / 0.25)); const flick = 0.9 + Math.sin(t * 13) * 0.05 + Math.sin(t * 7.3) * 0.05;
     paper.opacity = fade; artM.opacity = fade; gm.opacity = 0.85 * fade * flick; o.scale.setScalar(Math.min(1, k * 10) * (1 - k * 0.3));

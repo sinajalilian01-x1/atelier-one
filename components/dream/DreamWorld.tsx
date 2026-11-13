@@ -226,7 +226,7 @@ function Fireflies({ count }: { count: number }) {
 type Pose = { pos: V3; tgt: V3; fov: number };
 const POSES: Record<"wide" | "narrow", [Pose, Pose]> = {
   wide: [{ pos: [-0.5, 4.1, 9.6], tgt: [0.45, 1.45, -1.6], fov: 40 }, { pos: [11, 3.5, 33], tgt: [0.6, -3.4, 0], fov: 38 }],
-  narrow: [{ pos: [-2.0, 3.3, 8.6], tgt: [-2.35, 1.35, 0.4], fov: 52 }, { pos: [14, 5, 52], tgt: [0.5, -3.8, 0], fov: 50 }],
+  narrow: [{ pos: [-1.85, 2.75, 7.1], tgt: [-2.4, 1.5, 0.3], fov: 54 }, { pos: [14, 5, 52], tgt: [0.5, -3.8, 0], fov: 50 }],
 };
 function Rig({ lite, zoom }: { lite: boolean; zoom: number }) {
   const { camera, pointer, size } = useThree();

@@ -89,7 +89,7 @@ export function Woman({ working, canvas }: { working: boolean; canvas: { c: THRE
   const tmp = useMemo(() => ({ m: new THREE.Matrix4(), inv: new THREE.Matrix4() }), []);
 
   useFrame(({ clock }, dtRaw) => {
-    const g = root.current; if (!g) return; const dt = Math.min(dtRaw, 0.05); const t = clock.elapsedTime; const s = S.current;
+    const g = root.current; if (!g) return; const dt = Math.min(dtRaw, 0.05); const dtM = Math.min(dtRaw, 0.12); const t = clock.elapsedTime; const s = S.current;
     // ---- decide what to do
     const night = SKY.night > 0.65;
     let want: Plan;
@@ -106,11 +106,11 @@ export function Woman({ working, canvas }: { working: boolean; canvas: { c: THRE
       if (dist < (last ? 0.06 : 0.45)) { s.way.shift(); if (last) { s.v = 0; } }
       else {
         moving = true; const remaining = dist + s.way.slice(1).reduce((a, p, i, arr) => a + d2(i ? arr[i - 1] : tgt, p), 0);
-        const vmax = Math.min(1.15, Math.sqrt(2 * 1.2 * Math.max(0, remaining - 0.03)) + 0.08);
-        s.v = Math.min(vmax, s.v + 1.4 * dt);
-        s.heading = angDamp(s.heading, Math.atan2(dx, dz), 5, dt);
+        const vmax = Math.min(s.goal === PAINT_PLAN ? 1.6 : 1.15, Math.sqrt(2 * 1.2 * Math.max(0, remaining - 0.03)) + 0.08); // a brisker walk when a commission comes in
+        s.v = Math.min(vmax, s.v + 1.4 * dtM);
+        s.heading = angDamp(s.heading, Math.atan2(dx, dz), 5, dtM);
         const fwd = Math.max(0, Math.cos(Math.atan2(Math.sin(Math.atan2(dx, dz) - s.heading), Math.cos(Math.atan2(dx, dz) - s.heading)))); // slow down while turning sharply
-        const step = s.v * dt * (0.35 + 0.65 * fwd); s.x += Math.sin(s.heading) * step; s.z += Math.cos(s.heading) * step; s.phase += (step / STRIDE) * Math.PI;
+        const step = s.v * dtM * (0.35 + 0.65 * fwd); s.x += Math.sin(s.heading) * step; s.z += Math.cos(s.heading) * step; s.phase += (step / STRIDE) * Math.PI;
       }
     }
     if (!moving) {

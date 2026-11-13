@@ -5,6 +5,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStudio } from "@/lib/useStudio";
+import { useCommission } from "@/lib/useCommission";
+import { Commission } from "../commission/Commission";
 import { deriveView, fmtAmt, useNow, useTyped } from "@/lib/view";
 import { imgUrl, mediaUrl, toNear, txUrl, accountUrl } from "@/lib/config";
 import { Lofi, PRESETS } from "@/lib/lofi";
@@ -99,10 +101,13 @@ function Music({ playing, muted, onPlay, onMute, lofi }: { playing: boolean; mut
 /** world="dream" is the main design (the bearded painter on a floating island); world="fox" is the classic Autumn Fox. */
 export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }) {
   const dream = world === "dream";
-  const he = dream ? { s: "he", S: "He", p: "his" } : { s: "she", S: "She", p: "her" };
+  const he = { s: "she", S: "She", p: "her" };
   const poster = dream ? "/dream/poster" : "/fox/poster";
   const [zoom, setZoom] = useState(0);
   const s = useStudio();
+  const cm = useCommission(s);
+  const [cmOpen, setCmOpen] = useState(false);
+  const cmBusy = ["paying", "painting", "delivering"].includes(cm.phase);
   // tick the clock only while something is counting (a run, or the demo kill-switch countdown)
   const now = useNow(!['idle', 'done', 'error', 'killed'].includes(s.phase) || !!s.killReleaseAt);
   const v = deriveView(s, now);
@@ -128,13 +133,14 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
   const recent: any[] = useMemo(() => [...(s.state?.recent || [])].sort((a, b) => Number(b.token_id) - Number(a.token_id)), [s.state?.recent]); // eslint-disable-line @typescript-eslint/no-explicit-any
   const recent0 = recent[0];
   const artSrc: ArtSource | null = useMemo(() => {
+    if (cm.preview) return { key: "cm:" + (cm.painted?.media || "preview"), url: cm.preview, fresh: true };
     if (s.art) return { key: "run:" + (s.art.media || s.art.title), svg: s.art.svg, url: s.art.svg ? null : s.art.dataUrl || imgUrl(s.art.media), fresh: true };
     if (recent0?.metadata?.media) return { key: "tok:" + recent0.token_id, url: imgUrl(recent0.metadata.media), fresh: false };
     return null;
-  }, [s.art, recent0]);
-  const sketching = s.phase === "painting" && !s.art;
+  }, [s.art, recent0, cm.preview, cm.painted]);
+  const sketching = (s.phase === "painting" && !s.art) || ((cm.phase === "paying" || cm.phase === "painting") && !cm.preview);
   // the robin lands on the easel once the painting is finished; the lantern rises when this run's sale lands
-  const perch = !!s.art && !["idle", "painting", "error"].includes(s.phase);
+  const perch = (!!s.art && !["idle", "painting", "error"].includes(s.phase)) || cm.phase === "done";
 
   // ---- session numbers: real ledger lines for this run, or the studio's last real run ----
   const sale = v.lines.find((l) => l.kind === "sale");
@@ -142,7 +148,8 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
   const pStudio = v.lines.find((l) => l.kind === "payout" && l.who === "studio");
   const costSum = v.lines.filter((l) => l.kind === "cost").reduce((a, l) => a + BigInt(l.amount || "0"), 0n);
   const fresh = v.receiptMode === "run";
-  const saleKey = fresh && s.phase === "done" && sale ? sale.hash : null;
+  const cmKey = cm.phase === "done" ? cm.txs[cm.txs.length - 1]?.hash ?? null : null;
+  const saleKey = cmKey || (fresh && s.phase === "done" && sale ? sale.hash : null);
   const st = v.st;
   const title = s.art?.title || (v.running ? null : recent0?.metadata?.title);
   const progress = s.phase === "idle" ? (recent0 ? 100 : 0) : Math.round(s.progress);
@@ -163,7 +170,7 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
             <img src={`${poster}.webp`} alt="" fetchPriority="high" decoding="async" />
           </picture>
           {(mode === "3d" || mode === "lite") && dream && (
-            <DreamCanvas art={artSrc} sketching={sketching} working={v.running} playing={playing && !muted} lite={mode === "lite"} perch={perch} saleKey={saleKey} zoom={zoom} onZoom={setZoom}
+            <DreamCanvas art={artSrc} sketching={sketching} working={v.running || cmBusy} playing={playing && !muted} lite={mode === "lite"} perch={perch} saleKey={saleKey} zoom={zoom} onZoom={setZoom}
               onReady={() => setTimeout(() => setReady(true), 200)} onTooSlow={() => setMode("poster")} />
           )}
           {(mode === "3d" || mode === "lite") && !dream && (
@@ -181,17 +188,19 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
             <a href="#gallery">Gallery</a>
             <Link href="/ledger">Ledger</Link>
             <button className="fx-link" onClick={() => setPanel(true)}>{s.account ? s.account.replace(".testnet", "") : "Own a studio"}</button>
-            <button className="fx-start" onClick={onStart} disabled={v.running}>
+            {dream && <button className="fx-link" onClick={onStart} disabled={v.running || cmBusy}>{v.running ? `Studio run… ${v.elapsed ?? 0}s` : "Watch a studio run"}</button>}
+            {dream ? <button className="fx-start" onClick={() => setCmOpen(true)}>{cmBusy ? <><span className="spin" />Painting your poster…</> : <>Commission a poster<i>▶</i></>}</button> : <button className="fx-start" onClick={onStart} disabled={v.running}>
               {v.running ? <><span className="spin" />Working… {v.elapsed ?? 0}s</> : s.phase === "done" ? <>Paint another<i>▶</i></> : <>Start studio<i>▶</i></>}
-            </button>
+            </button>}
           </nav>
         </header>
 
         <div className="fx-ui">
           <div className="fx-intro">
-            <h1>{dream ? "An AI painter who runs his own art studio on NEAR." : "An AI fox that runs her own art studio on NEAR."}</h1>
-            <p>Press <b>Start studio</b>: {he.s} pays {he.p} own AI bill, paints, mints an NEP-171, sells it and splits the money with {he.p} owner. Real testnet transactions, about a minute.</p>
-            <button className="fx-start big" onClick={onStart} disabled={v.running}>{v.running ? <><span className="spin" />Working… {v.elapsed ?? 0}s</> : s.phase === "done" ? <>Paint another<i>▶</i></> : <>Start studio<i>▶</i></>}</button>
+            <h1>{dream ? "An AI painter who runs her own poster studio on NEAR." : "An AI fox that runs her own art studio on NEAR."}</h1>
+            {dream ? <p>Tell her what you need. Three studio hands bid, you pay into an on-chain escrow, {he.s} paints it live with NEAR AI, and the poster is minted straight to you while the same transaction pays the artist, the owner and {he.p} own compute budget. Testnet, real transactions.</p>
+              : <p>Press <b>Start studio</b>: {he.s} pays {he.p} own AI bill, paints, mints an NEP-171, sells it and splits the money with {he.p} owner. Real testnet transactions, about a minute.</p>}
+            {dream ? <button className="fx-start big" onClick={() => setCmOpen(true)}>Commission a poster<i>▶</i></button> : <button className="fx-start big" onClick={onStart} disabled={v.running}>{v.running ? <><span className="spin" />Working… {v.elapsed ?? 0}s</> : s.phase === "done" ? <>Paint another<i>▶</i></> : <>Start studio<i>▶</i></>}</button>}
           </div>
 
           {s.phase === "awaiting-buyer" && (
@@ -316,6 +325,7 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
           <p className="looks">Other looks: {dream ? <Link href="/s/fox">Autumn Fox</Link> : <Link href="/">Dream Island</Link>} · <Link href="/receipt">Receipt</Link> · <Link href="/clay">Clay</Link> · <Link href="/s/lake">Lake</Link> · <Link href="/s/island">Island</Link> · <Link href="/s/robot">Robot</Link></p>
         </footer>
       </section>
+      {dream && cmOpen && <Commission c={cm} s={s} onClose={() => setCmOpen(false)} />}
       <Toast toast={s.toast} onClose={() => s.setToast(null)} />
       {panel && <OwnerPanel s={s} onClose={() => setPanel(false)} className="fx-modal" />}
     </div>

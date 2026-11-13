@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: { unoptimized: true },
+  // native SVG renderer + the poster fonts it reads from disk
+  serverExternalPackages: ["@resvg/resvg-js"],
+  outputFileTracingIncludes: { "/api/**": ["./assets/fonts/**"] },
   devIndicators: false,
   async redirects() {
     return [

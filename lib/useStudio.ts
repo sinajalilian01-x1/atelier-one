@@ -246,7 +246,7 @@ export function useStudio() {
   const globalLines: Line[] = ledger.flatMap((e) => linesFor(e));
   return {
     state, studioId, phase, steps, art, runLines, globalLines, ledger, error, tokenId, price, progress, startedAt, finishedAt,
-    account, connect, disconnect, start, chooseBuyer, countdown, toggleKill, killBusy, openStudio, useStudioOf, toast, setToast, refresh,
+    account, connect, disconnect, walletTx, start, chooseBuyer, countdown, toggleKill, killBusy, openStudio, useStudioOf, toast, setToast, refresh,
     isDemo: studioId === DEMO_STUDIO_ID, killReleaseAt,
   };
 }

@@ -2,8 +2,8 @@ import "server-only";
 import { localConcept, MOTIFS, PALETTES, renderSvg, hashSeed, type Motif } from "./art";
 
 const BASE = process.env.NEAR_AI_BASE_URL || "https://cloud-api.near.ai/v1";
-const TEXT_MODEL = process.env.NEAR_AI_TEXT_MODEL || "Qwen/Qwen3.6-35B-A3B-FP8";
-const IMAGE_MODEL = process.env.NEAR_AI_IMAGE_MODEL || "black-forest-labs/FLUX.2-klein-4B";
+export const TEXT_MODEL = process.env.NEAR_AI_TEXT_MODEL || "Qwen/Qwen3.6-35B-A3B-FP8";
+export const IMAGE_MODEL = process.env.NEAR_AI_IMAGE_MODEL || "black-forest-labs/FLUX.2-klein-4B";
 /** Flat compute fee charged to the studio budget (paid to the treasury) when the local fallback painter is used. */
 export const FALLBACK_FEE_YOCTO = "2000000000000000000000"; // 0.002 NEAR
 
@@ -34,7 +34,7 @@ export interface Artwork {
 }
 
 let priceCache: { v: number; t: number } | null = null;
-async function nearUsd(): Promise<number> {
+export async function nearUsd(): Promise<number> {
   if (priceCache && Date.now() - priceCache.t < 10 * 60_000) return priceCache.v;
   try {
     const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=near&vs_currencies=usd", { signal: AbortSignal.timeout(2500) });
@@ -45,17 +45,18 @@ async function nearUsd(): Promise<number> {
   return 2.5;
 }
 
-function usdToYocto(usd: number, nearUsdPrice: number): string {
+export function usdToYocto(usd: number, nearUsdPrice: number): string {
   const near = Math.max(usd / nearUsdPrice, 0.0001);
   return BigInt(Math.round(near * 1e9)).toString() + "000000000000000"; // 1e9 * 1e15 = 1e24
 }
 
-async function nearAiJson(prompt: string, system: string) {
+export async function nearAiJson(prompt: string, system: string, opts: { temperature?: number; maxTokens?: number; timeoutMs?: number } = {}) {
   const r = await fetch(`${BASE}/chat/completions`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${process.env.NEAR_AI_API_KEY}` },
-    body: JSON.stringify({ model: TEXT_MODEL, temperature: 0.9, max_tokens: 700, messages: [{ role: "system", content: system }, { role: "user", content: prompt }] }),
-    signal: AbortSignal.timeout(25_000),
+    // Qwen3 thinks by default; a thinking block would eat the token budget and the latency, so it is switched off.
+    body: JSON.stringify({ model: TEXT_MODEL, temperature: opts.temperature ?? 0.9, max_tokens: opts.maxTokens ?? 700, chat_template_kwargs: { enable_thinking: false }, messages: [{ role: "system", content: system }, { role: "user", content: prompt }] }),
+    signal: AbortSignal.timeout(opts.timeoutMs ?? 25_000),
   });
   if (!r.ok) throw new Error(`NEAR AI chat ${r.status}: ${(await r.text()).slice(0, 200)}`);
   const j = await r.json();
@@ -65,11 +66,11 @@ async function nearAiJson(prompt: string, system: string) {
   return { data: JSON.parse(m[0]), usage: j.usage || {} };
 }
 
-async function nearAiImage(prompt: string): Promise<Buffer> {
+export async function nearAiImage(prompt: string, size = "1024x1024", seed?: number): Promise<Buffer> {
   const r = await fetch(`${BASE}/images/generations`, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${process.env.NEAR_AI_API_KEY}` },
-    body: JSON.stringify({ model: IMAGE_MODEL, prompt, n: 1, size: "1024x1024", response_format: "b64_json" }),
+    body: JSON.stringify({ model: IMAGE_MODEL, prompt, n: 1, size, response_format: "b64_json", ...(seed != null ? { seed } : {}) }),
     signal: AbortSignal.timeout(40_000),
   });
   if (!r.ok) throw new Error(`NEAR AI image ${r.status}: ${(await r.text()).slice(0, 200)}`);
@@ -85,7 +86,7 @@ export async function paint(jobId: string, style: string, floorNear: number): Pr
   const seed = hashSeed(jobId);
   if (process.env.NEAR_AI_API_KEY) {
     try {
-      const system = "You are Atelier One, a solo AI painter who runs his own art studio as a business on NEAR. You think out loud briefly, in first person, warm and witty. Reply with JSON only.";
+      const system = "You are Atelier One, a solo AI painter who runs her own art studio as a business on NEAR. You think out loud briefly, in first person, warm and witty. Reply with JSON only.";
       const prompt = `Owner's style rules: "${style}". Price floor: ${floorNear} NEAR (never price below it, at most ${(floorNear * 1.6).toFixed(3)}).
 Pick one motif from ${JSON.stringify(MOTIFS)} and one palette from ${JSON.stringify(PALETTES.map((p) => p.name))}.
 Return {"title": "2-3 word title", "motif": "...", "palette": "...", "price_near": number, "thinking": "max 28 words: what you're painting and why that price", "image_prompt": "one vivid sentence describing the painting"}`;

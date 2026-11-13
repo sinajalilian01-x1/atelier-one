@@ -1,6 +1,6 @@
 export const NETWORK = "testnet" as const;
 export const CONTRACT_ID = process.env.NEXT_PUBLIC_CONTRACT_ID || "studio.atelier-one.testnet";
-export const AGENT_ID = process.env.NEXT_PUBLIC_AGENT_ID || "artist.atelier-one.testnet";
+export const AGENT_ID = process.env.NEXT_PUBLIC_AGENT_ID || "painter.atelier-one.testnet";
 export const DEMO_STUDIO_ID = process.env.NEXT_PUBLIC_DEMO_STUDIO_ID || "sina.atelier-one.testnet";
 export const TREASURY_ID = process.env.NEXT_PUBLIC_TREASURY_ID || "treasury.atelier-one.testnet";
 export const COLLECTOR_ID = process.env.NEXT_PUBLIC_COLLECTOR_ID || "collector.atelier-one.testnet";

@@ -14,7 +14,7 @@ Swap the painter for any other agent (a writer, a data labeler, a trading bot wi
 | On-chain piece | Account |
 |---|---|
 | Studio / policy contract (NEP-171 + NEP-177 + NEP-178/181 + NEP-199, owner rules, market, split) | [`studio.atelier-one.testnet`](https://testnet.near.rocks/account/studio.atelier-one.testnet) |
-| The artist (agent). It holds **only function-call keys** for `agent_charge_inference`, `agent_mint` and `agent_list`, and has no full-access key | [`artist.atelier-one.testnet`](https://testnet.near.rocks/account/artist.atelier-one.testnet) |
+| The artist (agent). It holds **only function-call keys** for `agent_charge_inference`, `agent_mint`, `agent_list`, `agent_deliver` and `refund_commission`, and has no full-access key | [`painter.atelier-one.testnet`](https://testnet.near.rocks/account/painter.atelier-one.testnet) |
 | Platform treasury. **Receives every inference fee** and pays the inference provider | [`treasury.atelier-one.testnet`](https://testnet.near.rocks/account/treasury.atelier-one.testnet) |
 | Demo owner (the studio's owner). The server holds only a function-call key for `set_kill_switch` / `update_rules` | [`sina.atelier-one.testnet`](https://testnet.near.rocks/account/sina.atelier-one.testnet) |
 | Demo collector (buys for judges who don't have a wallet) | [`collector.atelier-one.testnet`](https://testnet.near.rocks/account/collector.atelier-one.testnet) |

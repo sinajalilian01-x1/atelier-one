@@ -54,6 +54,8 @@ enum StorageKey {
     Studios,
     Listings,
     TokenStudio,
+    Styles,
+    Commissions,
 }
 
 #[near(serializers = [borsh, json])]
@@ -92,6 +94,56 @@ pub struct Listing {
     pub listed_at_ms: U64,
 }
 
+/// An art style the studio can paint in. `artist_id` is the human artist whose style it is (or
+/// None for the studio's own AI house styles). Only styles marked `authorized` (the artist agreed
+/// and the admin recorded the license note) can be commissioned. The artist gets `artist_bps` of
+/// every commission painted in their style, paid on-chain at delivery.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct Style {
+    pub id: String,
+    pub name: String,
+    pub artist_id: Option<AccountId>,
+    pub artist_bps: u16,
+    pub min_price: U128,
+    pub authorized: bool,
+    pub license: String,
+    pub works: u32,
+    pub artist_earned_total: U128,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug, PartialEq)]
+pub enum CommissionStatus { Open, Delivered, Refunded }
+
+/// A paid commission. The buyer's NEAR stays in escrow on this contract until the agent delivers
+/// (mints the work straight to the buyer and splits the payment) or the commission is refunded.
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Debug)]
+pub struct Commission {
+    pub id: U64,
+    pub buyer_id: AccountId,
+    pub studio_id: AccountId,
+    pub style_id: String,
+    pub price: U128,
+    pub brief_hash: String,
+    pub status: CommissionStatus,
+    pub token_id: Option<TokenId>,
+    pub created_at_ms: U64,
+}
+
+const COMMISSION_TIMEOUT_MS: u64 = 30 * 60 * 1000;
+const MAX_ARTIST_BPS: u16 = 5_000;
+
+/// How a commission of `price` is divided: (artist, owner, studio budget).
+/// The artist (if any) takes `artist_bps` first; the rest is split owner/studio like a primary sale.
+pub fn commission_split(price: u128, artist_bps: u16, has_artist: bool, split_owner_bps: u16) -> (u128, u128, u128) {
+    let artist = if has_artist { bps(price, artist_bps) } else { 0 };
+    let rest = price - artist;
+    let owner = bps(rest, split_owner_bps);
+    (artist, owner, rest - owner)
+}
+
 #[near(serializers = [json])]
 pub struct Payout {
     pub payout: HashMap<AccountId, U128>,
@@ -120,6 +172,9 @@ pub struct Contract {
     listings: IterableMap<TokenId, Listing>,
     token_studio: LookupMap<TokenId, AccountId>,
     next_token: u64,
+    styles: IterableMap<String, Style>,
+    commissions: IterableMap<u64, Commission>,
+    next_commission: u64,
 }
 
 fn emit(event: &str, data: serde_json::Value) {
@@ -148,10 +203,12 @@ pub fn sale_split(price: u128, primary: bool, royalty_bps: u16, split_owner_bps:
 
 const PINATA_BASE_URI: &str = "https://gateway.pinata.cloud/ipfs";
 
+/// State layout of the deployed v2 contract (before commissions and styles).
 #[near(serializers = [borsh])]
-struct ContractV1 {
+struct ContractV2 {
     admin_id: AccountId,
     agent_id: AccountId,
+    treasury_id: AccountId,
     tokens: NonFungibleToken,
     metadata: LazyOption<NFTContractMetadata>,
     studios: IterableMap<AccountId, Studio>,
@@ -195,29 +252,31 @@ impl Contract {
             listings: IterableMap::new(StorageKey::Listings),
             token_studio: LookupMap::new(StorageKey::TokenStudio),
             next_token: 1,
+            styles: IterableMap::new(StorageKey::Styles),
+            commissions: IterableMap::new(StorageKey::Commissions),
+            next_commission: 1,
         }
     }
 
-    /// One-time upgrade from v1 state: adds the treasury and an IPFS `base_uri` so new tokens can
-    /// store a bare CID as `media` (cheaper mint storage).
+    /// In-place upgrade from v2 state: keeps every token, studio and listing, and adds the
+    /// style registry and commission escrow.
     #[private]
     #[init(ignore_state)]
-    pub fn migrate(treasury_id: AccountId) -> Self {
-        let old: ContractV1 = env::state_read().unwrap_or_else(|| env::panic_str("No v1 state"));
-        let mut metadata = old.metadata;
-        let mut md = metadata.get().unwrap();
-        md.base_uri = Some(PINATA_BASE_URI.to_string());
-        metadata.set(&md);
+    pub fn migrate() -> Self {
+        let old: ContractV2 = env::state_read().unwrap_or_else(|| env::panic_str("No v2 state"));
         Self {
             admin_id: old.admin_id,
             agent_id: old.agent_id,
-            treasury_id,
+            treasury_id: old.treasury_id,
             tokens: old.tokens,
-            metadata,
+            metadata: old.metadata,
             studios: old.studios,
             listings: old.listings,
             token_studio: old.token_studio,
             next_token: old.next_token,
+            styles: IterableMap::new(StorageKey::Styles),
+            commissions: IterableMap::new(StorageKey::Commissions),
+            next_commission: 1,
         }
     }
 
@@ -537,6 +596,140 @@ impl Contract {
         emit("payout_split", json!({"studio_id": studio_id, "token_id": token_id, "balance": balance,
             "owner_amount": U128(owner_amount), "studio_amount": U128(studio_amount), "budget": s.budget}));
         Payout { payout }
+    }
+
+    // ---------------- commissions ----------------
+
+    /// Commission a work: attach at least the style's `min_price` (and the studio floor). The NEAR
+    /// is held in escrow until the agent delivers or the commission is refunded.
+    /// `brief_hash` is the sha256 of the brief text (the brief itself stays off-chain).
+    #[payable]
+    pub fn commission(&mut self, studio_id: AccountId, style_id: String, brief_hash: String) -> Commission {
+        let buyer = env::predecessor_account_id();
+        let price = env::attached_deposit().as_yoctonear();
+        let s = self.studio_or_panic(&studio_id);
+        require!(!s.kill_switch, "Kill switch engaged: the owner has paused this agent");
+        let st = self.styles.get(&style_id).cloned().unwrap_or_else(|| env::panic_str("Unknown style"));
+        require!(st.authorized, "Style is not authorized by its artist");
+        require!(price >= st.min_price.0 && price >= s.floor.0, "Attached deposit is below the quoted price");
+        require!(brief_hash.len() == 64, "brief_hash must be a hex sha256");
+        let id = self.next_commission;
+        self.next_commission += 1;
+        let c = Commission {
+            id: U64(id), buyer_id: buyer.clone(), studio_id: studio_id.clone(), style_id: style_id.clone(),
+            price: U128(price), brief_hash, status: CommissionStatus::Open, token_id: None,
+            created_at_ms: U64(env::block_timestamp() / 1_000_000),
+        };
+        self.commissions.insert(id, c.clone());
+        emit("commissioned", json!({"commission_id": U64(id), "studio_id": studio_id, "buyer_id": buyer,
+            "style_id": style_id, "price": U128(price), "brief_hash": c.brief_hash}));
+        c
+    }
+
+    /// Agent delivers a commission: mints the work straight to the buyer (storage from the studio
+    /// budget), then splits the escrowed payment: artist royalty (if the style has a human artist),
+    /// then owner / studio budget by the studio's split.
+    pub fn agent_deliver(&mut self, commission_id: U64, metadata: TokenMetadata) -> serde_json::Value {
+        self.assert_agent();
+        let mut c = self.commissions.get(&commission_id.0).cloned().unwrap_or_else(|| env::panic_str("Unknown commission"));
+        require!(c.status == CommissionStatus::Open, "Commission is not open");
+        let mut s = self.live_studio(&c.studio_id);
+        require!(metadata.title.is_some() && metadata.media.is_some(), "Title and media required");
+        let token_id = format!("{}", self.next_token);
+        self.next_token += 1;
+        let before = env::storage_usage();
+        let mut md = metadata;
+        md.issued_at = Some(format!("{}", env::block_timestamp() / 1_000_000));
+        md.copies = Some(1);
+        self.tokens.internal_mint_with_refund(token_id.clone(), c.buyer_id.clone(), Some(md), None);
+        self.token_studio.insert(token_id.clone(), c.studio_id.clone());
+        self.token_studio.flush();
+        let used = env::storage_usage().saturating_sub(before);
+        let storage = env::storage_byte_cost().as_yoctonear() * used as u128;
+
+        let mut st = self.styles.get(&c.style_id).cloned().unwrap_or_else(|| env::panic_str("Unknown style"));
+        let price = c.price.0;
+        let (artist_amount, owner_amount, studio_amount) =
+            commission_split(price, st.artist_bps, st.artist_id.is_some(), s.split_owner_bps);
+        require!(storage <= s.budget.0 + studio_amount, "Studio budget too low to pay mint storage");
+        s.budget = U128(s.budget.0 + studio_amount - storage);
+        s.storage_spent_total = U128(s.storage_spent_total.0 + storage);
+        s.works_minted += 1;
+        s.works_sold += 1;
+        s.revenue_total = U128(s.revenue_total.0 + price);
+        s.owner_earned_total = U128(s.owner_earned_total.0 + owner_amount);
+        s.studio_earned_total = U128(s.studio_earned_total.0 + studio_amount);
+        self.studios.insert(c.studio_id.clone(), s.clone());
+        st.works += 1;
+        st.artist_earned_total = U128(st.artist_earned_total.0 + artist_amount);
+        self.styles.insert(st.id.clone(), st.clone());
+        c.status = CommissionStatus::Delivered;
+        c.token_id = Some(token_id.clone());
+        self.commissions.insert(commission_id.0, c.clone());
+
+        if let Some(a) = &st.artist_id { pay(a, artist_amount); }
+        pay(&s.owner_id, owner_amount);
+
+        NftMint { owner_id: &c.buyer_id, token_ids: &[&token_id], memo: Some("atelier-one commission") }.emit();
+        emit("commission_delivered", json!({"commission_id": commission_id, "studio_id": c.studio_id,
+            "token_id": token_id, "buyer_id": c.buyer_id, "style_id": st.id, "price": U128(price),
+            "storage_cost": U128(storage)}));
+        emit("split_paid", json!({"studio_id": c.studio_id, "token_id": token_id, "owner_id": s.owner_id,
+            "owner_amount": U128(owner_amount), "studio_amount": U128(studio_amount),
+            "artist_id": st.artist_id, "artist_amount": U128(artist_amount),
+            "split_owner_bps": s.split_owner_bps, "budget": s.budget}));
+        json!({"commission_id": commission_id, "token_id": token_id, "buyer_id": c.buyer_id, "price": U128(price),
+               "artist_amount": U128(artist_amount), "owner_amount": U128(owner_amount),
+               "studio_amount": U128(studio_amount), "storage_cost": U128(storage)})
+    }
+
+    /// Refund an open commission. The agent can refund at any time (e.g. generation failed);
+    /// the buyer can take the money back once the commission is 30 minutes old and undelivered.
+    pub fn refund_commission(&mut self, commission_id: U64) -> Commission {
+        let mut c = self.commissions.get(&commission_id.0).cloned().unwrap_or_else(|| env::panic_str("Unknown commission"));
+        require!(c.status == CommissionStatus::Open, "Commission is not open");
+        let caller = env::predecessor_account_id();
+        let age = env::block_timestamp() / 1_000_000 - c.created_at_ms.0;
+        require!(caller == self.agent_id || (caller == c.buyer_id && age >= COMMISSION_TIMEOUT_MS),
+            "Only the agent, or the buyer after 30 minutes, can refund");
+        c.status = CommissionStatus::Refunded;
+        self.commissions.insert(commission_id.0, c.clone());
+        pay(&c.buyer_id, c.price.0);
+        emit("commission_refunded", json!({"commission_id": commission_id, "buyer_id": c.buyer_id, "amount": c.price}));
+        c
+    }
+
+    /// Admin: register or update a style. A style with a human `artist_id` must carry the
+    /// license note the artist agreed to; unauthorized styles can not be commissioned.
+    pub fn set_style(&mut self, id: String, name: String, artist_id: Option<AccountId>, artist_bps: u16,
+                     min_price: U128, authorized: bool, license: String) -> Style {
+        require!(env::predecessor_account_id() == self.admin_id, "Admin only");
+        require!(id.len() <= 32 && name.len() <= 64 && license.len() <= 280, "Style fields too long");
+        require!(artist_bps <= MAX_ARTIST_BPS, "artist_bps must be <= 5000");
+        require!(min_price.0 >= MIN_FLOOR, "min_price must be at least 0.01 NEAR");
+        require!(artist_id.is_some() || artist_bps == 0, "artist_bps needs an artist_id");
+        require!(!authorized || artist_id.is_none() || !license.is_empty(), "A human artist's style needs a license note");
+        let prev = self.styles.get(&id).cloned();
+        let st = Style { id: id.clone(), name, artist_id, artist_bps, min_price, authorized, license,
+            works: prev.as_ref().map(|p| p.works).unwrap_or(0),
+            artist_earned_total: prev.map(|p| p.artist_earned_total).unwrap_or(U128(0)) };
+        self.styles.insert(id.clone(), st.clone());
+        emit("style_set", json!({"style_id": id, "artist_id": st.artist_id, "artist_bps": artist_bps,
+            "min_price": min_price, "authorized": authorized}));
+        st
+    }
+
+    pub fn get_styles(&self) -> Vec<Style> { self.styles.values().cloned().collect() }
+
+    pub fn get_commission(&self, commission_id: U64) -> Option<Commission> {
+        self.commissions.get(&commission_id.0).cloned()
+    }
+
+    pub fn get_commissions(&self, from_index: Option<u32>, limit: Option<u32>) -> Vec<Commission> {
+        let n = self.commissions.len() as usize;
+        let lim = limit.unwrap_or(50) as usize;
+        let from = from_index.map(|f| f as usize).unwrap_or(n.saturating_sub(lim));
+        self.commissions.values().skip(from).take(lim).cloned().collect()
     }
 
     // ---------------- views ----------------
@@ -876,6 +1069,102 @@ mod tests {
         let s = c.get_studio(owner()).unwrap();
         assert!(s.storage_spent_total.0 > 0);
         assert_eq!(s.budget.0 + s.storage_spent_total.0, NEAR);
+    }
+
+    fn sina() -> AccountId { "sina.testnet".parse().unwrap() }
+    const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    fn styles(c: &mut Contract) {
+        ctx(admin(), 0);
+        c.set_style("house".into(), "House".into(), None, 0, U128(20 * MILLI), true, "".into());
+        c.set_style("sina".into(), "Sina".into(), Some(sina()), 2_000, U128(50 * MILLI), true, "own style, agreed".into());
+        c.set_style("nope".into(), "Nope".into(), Some(accounts(4)), 2_000, U128(50 * MILLI), false, "".into());
+    }
+
+    #[test]
+    fn commission_split_math() {
+        // 0.1 NEAR, 20% artist, 70/30: artist 0.02, owner 0.056, studio 0.024
+        assert_eq!(commission_split(100 * MILLI, 2_000, true, 7_000), (20 * MILLI, 56 * MILLI, 24 * MILLI));
+        assert_eq!(commission_split(100 * MILLI, 0, false, 7_000), (0, 70 * MILLI, 30 * MILLI));
+        for p in [1u128, 7, 999, 123_456_789_012_345] {
+            let (a, o, s) = commission_split(p, 3_333, true, 4_999);
+            assert_eq!(a + o + s, p);
+        }
+    }
+
+    #[test]
+    fn commission_escrow_then_deliver_mints_to_buyer_and_pays_artist() {
+        let mut c = setup();
+        styles(&mut c);
+        ctx(buyer(), 100 * MILLI);
+        let cm = c.commission(owner(), "sina".into(), HASH.into());
+        assert_eq!(cm.status, CommissionStatus::Open);
+        let budget0 = c.get_studio(owner()).unwrap().budget.0;
+        ctx(agent(), 0);
+        let mut m = md();
+        m.extra = Some("{\"provenance\":{}}".into());
+        let r = c.agent_deliver(cm.id, m);
+        assert_eq!(r["artist_amount"], json!(U128(20 * MILLI)));
+        assert_eq!(r["owner_amount"], json!(U128(56 * MILLI)));
+        let t: TokenId = r["token_id"].as_str().unwrap().into();
+        assert_eq!(c.nft_token(t.clone()).unwrap().owner_id, buyer());
+        let s = c.get_studio(owner()).unwrap();
+        assert_eq!(s.budget.0 + s.storage_spent_total.0, budget0 + 24 * MILLI);
+        assert_eq!(s.works_sold, 1);
+        let st = c.get_styles().into_iter().find(|x| x.id == "sina").unwrap();
+        assert_eq!(st.artist_earned_total.0, 20 * MILLI);
+        assert_eq!(c.get_commission(cm.id).unwrap().status, CommissionStatus::Delivered);
+        // can not deliver twice
+        let again = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { c.agent_deliver(cm.id, md()); }));
+        assert!(again.is_err());
+        // the token pays the studio royalty on resale like any other work
+        assert_eq!(c.get_token_studio(t), Some(owner()));
+    }
+
+    #[test]
+    #[should_panic(expected = "Style is not authorized by its artist")]
+    fn unauthorized_style_can_not_be_commissioned() {
+        let mut c = setup();
+        styles(&mut c);
+        ctx(buyer(), 100 * MILLI);
+        c.commission(owner(), "nope".into(), HASH.into());
+    }
+
+    #[test]
+    #[should_panic(expected = "Attached deposit is below the quoted price")]
+    fn commission_needs_the_price() {
+        let mut c = setup();
+        styles(&mut c);
+        ctx(buyer(), 49 * MILLI);
+        c.commission(owner(), "sina".into(), HASH.into());
+    }
+
+    #[test]
+    fn refunds_agent_anytime_buyer_after_timeout() {
+        let mut c = setup();
+        styles(&mut c);
+        ctx(buyer(), 60 * MILLI);
+        let cm = c.commission(owner(), "house".into(), HASH.into());
+        ctx(buyer(), 0);
+        let early = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| { c.refund_commission(cm.id); }));
+        assert!(early.is_err(), "buyer can not refund before the timeout");
+        ctx(agent(), 0);
+        assert_eq!(c.refund_commission(cm.id).status, CommissionStatus::Refunded);
+        ctx(buyer(), 60 * MILLI);
+        let cm2 = c.commission(owner(), "house".into(), HASH.into());
+        let mut b = VMContextBuilder::new();
+        b.current_account_id("studio.testnet".parse().unwrap()).predecessor_account_id(buyer())
+            .account_balance(NearToken::from_near(100)).block_timestamp(1_700_000_000_000_000_000 + COMMISSION_TIMEOUT_MS * 1_000_000);
+        testing_env!(b.build());
+        assert_eq!(c.refund_commission(cm2.id).status, CommissionStatus::Refunded);
+    }
+
+    #[test]
+    #[should_panic(expected = "Admin only")]
+    fn only_admin_sets_styles() {
+        let mut c = setup();
+        ctx(owner(), 0);
+        c.set_style("x".into(), "X".into(), None, 0, U128(20 * MILLI), true, "".into());
     }
 
     #[test]

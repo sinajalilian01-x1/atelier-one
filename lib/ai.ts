@@ -85,7 +85,7 @@ export async function paint(jobId: string, style: string, floorNear: number): Pr
   const seed = hashSeed(jobId);
   if (process.env.NEAR_AI_API_KEY) {
     try {
-      const system = "You are Atelier One, a solo AI painter who runs her own art studio as a business on NEAR. You think out loud briefly, in first person, warm and witty. Reply with JSON only.";
+      const system = "You are Atelier One, a solo AI painter who runs his own art studio as a business on NEAR. You think out loud briefly, in first person, warm and witty. Reply with JSON only.";
       const prompt = `Owner's style rules: "${style}". Price floor: ${floorNear} NEAR (never price below it, at most ${(floorNear * 1.6).toFixed(3)}).
 Pick one motif from ${JSON.stringify(MOTIFS)} and one palette from ${JSON.stringify(PALETTES.map((p) => p.name))}.
 Return {"title": "2-3 word title", "motif": "...", "palette": "...", "price_near": number, "thinking": "max 28 words: what you're painting and why that price", "image_prompt": "one vivid sentence describing the painting"}`;
@@ -113,5 +113,5 @@ Return {"title": "2-3 word title", "motif": "...", "palette": "...", "price_near
   }
   const c = localConcept(jobId, floorNear);
   const svg = renderSvg({ motif: c.motif, palette: c.palette, seed, title: c.title });
-  return { title: c.title, thinking: c.thinking, motif: c.motif, paletteName: c.palette.name, price: c.price, mime: "image/svg+xml", bytes: Buffer.from(svg), svg, provider: "atelier-local-painter (fallback: no NEAR AI key)", model: "atelier-generative-svg-v1", costUsd: null, costYocto: FALLBACK_FEE_YOCTO };
+  return { title: c.title, thinking: c.thinking, motif: c.motif, paletteName: c.palette.name, price: c.price, mime: "image/svg+xml", bytes: Buffer.from(svg), svg, provider: "atelier-local-painter (fallback: NEAR AI unavailable)", model: "atelier-generative-svg-v1", costUsd: null, costYocto: FALLBACK_FEE_YOCTO };
 }

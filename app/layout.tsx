@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Syne, Space_Mono, Baloo_2, Nunito } from "next/font/google";
-import "@near-wallet-selector/modal-ui/styles.css";
+import "./wallet-modal.css";
 import "./globals.css";
 
-const syne = Syne({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--f-syne" });
+const syne = Syne({ subsets: ["latin"], weight: ["600", "700", "800"], variable: "--f-syne", preload: false });
 const mono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"], variable: "--f-mono" });
-const baloo = Baloo_2({ subsets: ["latin"], weight: ["500", "700", "800"], variable: "--f-baloo" });
+const baloo = Baloo_2({ subsets: ["latin"], weight: ["500", "700", "800"], variable: "--f-baloo", preload: false });
 const nunito = Nunito({ subsets: ["latin"], weight: ["500", "700", "800"], variable: "--f-nunito" });
 
 const DESC = "Press Start and watch an AI fox pay her own AI bill, paint, mint an NEP-171 artwork, sell it and split the money with her owner, in real NEAR testnet transactions.";

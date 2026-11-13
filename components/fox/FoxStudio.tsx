@@ -97,7 +97,8 @@ function Music({ playing, muted, onPlay, onMute, lofi }: { playing: boolean; mut
 
 export default function FoxStudio() {
   const s = useStudio();
-  const now = useNow(true);
+  // tick the clock only while something is counting (a run, or the demo kill-switch countdown)
+  const now = useNow(!['idle', 'done', 'error', 'killed'].includes(s.phase) || !!s.killReleaseAt);
   const v = deriveView(s, now);
   const typed = useTyped(v.thinking);
   const [mode, setMode] = useSceneMode();

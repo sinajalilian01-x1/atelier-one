@@ -102,7 +102,7 @@ export default function SceneSkin({ skin }: { skin: SceneKey }) {
   const costSum = costs.reduce((a, l) => a + BigInt(l.amount || "0"), 0n);
   const fresh = v.receiptMode === "run";
   const st = v.st;
-  const title = s.art?.title || recent0?.metadata?.title;
+  const title = s.art?.title || (v.running ? "a new piece" : recent0?.metadata?.title);
   const paintLabel = s.phase === "idle" ? (recent0 ? "Last painted" : "Easel ready") : s.phase === "done" ? "Sold" : s.phase === "killed" ? "Paused" : s.phase === "error" ? "Stopped" : sketching ? "Sketching" : "Now painting";
   const progress = s.phase === "idle" ? (recent0 ? 100 : 0) : Math.round(s.progress);
   const headline = cfg.headline?.split("|");
@@ -154,7 +154,7 @@ export default function SceneSkin({ skin }: { skin: SceneKey }) {
             </div>
             <div className="pi">
               <div className="ph"><span>{paintLabel}</span><b>{progress}%</b></div>
-              <div className="pt" title={title}>{title ? `“${title}”` : "…"}</div>
+              <div className="pt" title={title}>{title ? (s.art || !v.running ? `“${title}”` : "A new piece…") : "…"}</div>
               <div className="bar"><div style={{ width: `${progress}%` }} /></div>
               <div className="chips">
                 {s.steps.map((x) => x.hash

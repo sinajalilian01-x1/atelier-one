@@ -98,12 +98,14 @@ function Music({ playing, muted, onPlay, onMute, lofi }: { playing: boolean; mut
   );
 }
 
-/** world="dream" is the main design (the bearded painter on a floating island); world="fox" is the classic Autumn Fox. */
+/** world="dream" is the main design (the painter's little farm on a floating island); world="fox" is the classic Autumn Fox. */
 export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }) {
   const dream = world === "dream";
   const he = { s: "she", S: "She", p: "her" };
   const poster = dream ? "/dream/poster" : "/fox/poster";
-  const [zoom, setZoom] = useState(0);
+  const [zoom, setZoom] = useState(0.5);
+  const [tod, setTod] = useState<"day" | "night">("day");
+  const setTime = (t: "day" | "night") => { setTod(t); window.dispatchEvent(new CustomEvent("ao-time", { detail: t })); };
   const s = useStudio();
   const cm = useCommission(s);
   const [cmOpen, setCmOpen] = useState(false);
@@ -111,6 +113,10 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
   // tick the clock only while something is counting (a run, or the demo kill-switch countdown)
   const now = useNow(!['idle', 'done', 'error', 'killed'].includes(s.phase) || !!s.killReleaseAt);
   const v = deriveView(s, now);
+  // when she starts painting (a studio run or a commission), the camera walks in to the easel
+  const paintingNow = v.running || cmBusy;
+  const [wasPainting, setWasPainting] = useState(false);
+  if (paintingNow !== wasPainting) { setWasPainting(paintingNow); if (paintingNow) setZoom(0); }
   const typed = useTyped(v.thinking);
   const [mode, setMode] = useSceneMode();
   const [ready, setReady] = useState(false);
@@ -273,12 +279,22 @@ export default function FoxStudio({ world = "fox" }: { world?: "fox" | "dream" }
         </div>
         {dream && (mode === "3d" || mode === "lite") && ready && (
           <div className="fx-zoom" role="group" aria-label="Camera zoom">
-            <button onClick={() => setZoom((z) => Math.min(1, z < 0.5 ? 1 : z + 0.25))} disabled={zoom >= 0.99} aria-label="Zoom out to the whole island" title="Zoom out">
+            <button onClick={() => setZoom((z) => Math.min(1, z < 0.25 ? 0.5 : 1))} disabled={zoom >= 0.99} aria-label="Zoom out" title="Zoom out">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M7.5 10.5h6M15.5 15.5 20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
             </button>
-            <span>{zoom > 0.5 ? "Island" : "Studio"}</span>
-            <button onClick={() => setZoom((z) => Math.max(0, z > 0.5 ? 0 : z - 0.25))} disabled={zoom <= 0.01} aria-label="Zoom back in to the studio" title="Zoom in">
+            <span>{zoom > 0.75 ? "Island" : zoom > 0.25 ? "Farm" : "Studio"}</span>
+            <button onClick={() => setZoom((z) => Math.max(0, z > 0.75 ? 0.5 : 0))} disabled={zoom <= 0.01} aria-label="Zoom in" title="Zoom in">
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M7.5 10.5h6M10.5 7.5v6M15.5 15.5 20 20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+            </button>
+          </div>
+        )}
+        {dream && (mode === "3d" || mode === "lite") && ready && (
+          <div className="fx-tod" role="group" aria-label="Time of day">
+            <button className={tod === "day" ? "on" : ""} onClick={() => setTime("day")} aria-pressed={tod === "day"} aria-label="Jump to day" title="Day">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden><circle cx="12" cy="12" r="4.2" fill="currentColor" /><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+            </button>
+            <button className={tod === "night" ? "on" : ""} onClick={() => setTime("night")} aria-pressed={tod === "night"} aria-label="Jump to night" title="Night">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1Z" fill="currentColor" /></svg>
             </button>
           </div>
         )}

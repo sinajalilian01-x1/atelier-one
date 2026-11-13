@@ -312,8 +312,8 @@ export function Lantern({ art, fireKey, from, lite, demo }: { art: ArtSource | n
   const g = useRef<THREE.Group>(null); const glow = useRef<THREE.Sprite>(null); const light = useRef<THREE.PointLight>(null);
   const [start, setStart] = useState<number | null>(null); const clockRef = useRef(0); const seen = useRef<string | null>(fireKey);
   useEffect(() => { if (fireKey && fireKey !== seen.current) { seen.current = fireKey; setStart(clockRef.current); } }, [fireKey]);
-  const paper = useMemo(() => new THREE.MeshBasicMaterial({ color: new THREE.Color("#FFE2B0").multiplyScalar(2.2), toneMapped: false, side: THREE.DoubleSide, transparent: true }), []);
-  const artM = useMemo(() => new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.9, 1.75, 1.5), toneMapped: false, transparent: true }), [tex]);
+  const paper = useMemo(() => new THREE.MeshBasicMaterial({ color: new THREE.Color("#FFD9A0").multiplyScalar(1.5), toneMapped: false, side: THREE.DoubleSide, transparent: true }), []);
+  const artM = useMemo(() => new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.05, 1.0, 0.9), toneMapped: false, transparent: true }), [tex]);
   const gm = useMemo(() => new THREE.SpriteMaterial({ map: glowTexture(), color: "#FFB45A", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 }), []);
   const DUR = 16;
   useFrame(({ clock }) => {
@@ -339,7 +339,7 @@ export function Lantern({ art, fireKey, from, lite, demo }: { art: ArtSource | n
       <mesh geometry={GEO.box} material={M("#5A3520")} position={[0, 0.3, 0]} scale={[0.56, 0.05, 0.56]} />
       <mesh geometry={GEO.box} material={M("#5A3520")} position={[0, -0.3, 0]} scale={[0.56, 0.05, 0.56]} />
       <mesh geometry={GEO.cyl6} material={M("#5A3520")} position={[0, 0.4, 0]} scale={[0.015, 0.16, 0.015]} />
-      <sprite ref={glow} material={gm} scale={[2.6, 2.6, 1]} />
+      <sprite ref={glow} material={gm} scale={[2.2, 2.2, 1]} />
       <pointLight ref={light} intensity={0} distance={7} decay={1.5} color="#FFA850" />
     </group>
   );

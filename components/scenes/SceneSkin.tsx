@@ -86,7 +86,9 @@ export default function SceneSkin({ skin }: { skin: SceneKey }) {
   const onStart = useCallback(() => { if (!userPaused.current && !playing) play().catch(() => {}); s.start(); }, [s, playing, play]);
 
   // ---- what the easel in the 3D scene shows: the real artwork ----
-  const recent0 = s.state?.recent?.[0];
+  // nft_tokens comes back in string order ("14" < "2"), so sort by numeric id, newest first.
+  const recent: any[] = useMemo(() => [...(s.state?.recent || [])].sort((a, b) => Number(b.token_id) - Number(a.token_id)), [s.state?.recent]); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const recent0 = recent[0];
   const artSrc: ArtSource | null = useMemo(() => {
     if (s.art) return { key: "run:" + (s.art.media || s.art.title), svg: s.art.svg, url: s.art.svg ? null : s.art.dataUrl || mediaUrl(s.art.media), fresh: true };
     if (recent0?.metadata?.media) return { key: "tok:" + recent0.token_id, url: mediaUrl(recent0.metadata.media), fresh: false };
@@ -212,7 +214,7 @@ export default function SceneSkin({ skin }: { skin: SceneKey }) {
       <section className="sk-below" id="gallery">
         <h2>Fresh off the easel</h2>
         <div className="sk-gal">
-          {(s.state?.recent || []).slice(0, 6).map((t: any) => (
+          {recent.slice(0, 6).map((t) => (
             <a key={t.token_id} className="sk-card" href={mediaUrl(t.metadata?.media)} target="_blank" rel="noreferrer">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={mediaUrl(t.metadata?.media)} alt={t.metadata?.title} loading="lazy" />

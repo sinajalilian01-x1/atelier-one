@@ -17,7 +17,7 @@ export function linesFor(e: EntryLike): Line[] {
   e.events.filter((ev) => ev.standard === "atelier_one").forEach((ev, i) => {
     const d = ev.data, k = `${e.hash}:${i}`;
     switch (ev.event) {
-      case "inference_paid": L.push({ ...base, key: k, label: "AI inference", sub: (String(d.provider).startsWith("NEAR AI") ? `NEAR AI Cloud · ${String(d.model).split(" + ")[0]}` : "local painter · no NEAR AI key") + (d.to ? " → treasury" : ""), amount: "-" + d.amount, kind: "cost" }); break;
+      case "inference_paid": L.push({ ...base, key: k, label: "AI inference", sub: (String(d.provider).startsWith("NEAR AI") ? `NEAR AI · ${String(d.model).split(" + ")[0].split("/").pop()}` : d.to ? "local painter" : "local painter · no NEAR AI key") + (d.to ? " · fee → treasury" : ""), amount: "-" + d.amount, kind: "cost" }); break;
       case "minted": L.push({ ...base, key: k, label: `Mint “${d.title}”`, sub: `NEP-171 #${d.token_id} · storage`, amount: "-" + d.storage_cost, kind: "cost" }); break;
       case "listed": L.push({ ...base, key: k, label: `List #${d.token_id} @ ${toNear(d.price, 3)}`, sub: d.floor ? `floor ${toNear(d.floor, 3)} · rule kept` : "resale listing", amount: null, kind: "info" }); break;
       case "sold": L.push({ ...base, key: k, label: `SALE “${e.title || "#" + d.token_id}”`, sub: `buyer: ${short(d.buyer_id)}`, amount: d.price, kind: "sale" }); break;

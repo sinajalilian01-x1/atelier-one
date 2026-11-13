@@ -97,7 +97,7 @@ button:disabled{cursor:not-allowed}
 .rc-empty{color:#999;padding:8px 0}
 .rc-receipt .l{display:flex;justify-content:space-between;gap:10px;padding:4px 0;text-decoration:none;animation:rcPrint .5s ease}
 .rc-receipt a.l:hover{background:#F3F8E6}
-.rc-receipt .l i{font-style:normal;color:#888;font-size:11px;display:block;word-break:break-all}
+.rc-receipt .l i{font-style:normal;color:#888;font-size:11px;display:block;overflow-wrap:anywhere}
 .rc-receipt .l span{white-space:nowrap}
 .rc-receipt .l.sale span,.rc-receipt .l.royalty span{font-weight:700}
 .rc-receipt .l.payout div{padding-left:0}
